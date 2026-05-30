@@ -24,6 +24,7 @@ A lay-friendly macOS app that exposes **read-only WhatsApp** to local Claude Des
 - **Auth state lives outside the bundle**: `~/Library/Application Support/WhatsAppMCP/auth/` so it survives reinstalls / app updates.
 - **Logs**: `~/Library/Logs/WhatsAppMCP/` so debugging the headless `--mcp` mode is possible.
 - **Claude Desktop config patching**: the GUI has a "Configure Claude Desktop" button that idempotently writes the `mcpServers.whatsapp` block into `~/Library/Application Support/Claude/claude_desktop_config.json`. The user never edits JSON.
+- **Updates: notify-only.** On launch, the GUI polls the GitHub Releases API for the latest tag and compares to the running version. If newer, shows a non-intrusive banner with a link to the release page (and a "remind me later" option). The user downloads the new DMG and drag-replaces; auth state and store survive. No silent auto-install — keeps complexity out of v1 and respects the unsigned status. Sparkle is the v2 upgrade path if drag-replacing becomes painful.
 
 ### Pairing
 
@@ -141,4 +142,3 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 - **Chat-level blocklist** — let the user mark specific chats/groups as off-limits so they're filtered out of every tool's response. Read-only contract holds either way; this is for privacy in specific conversations (financial, legal, etc.). Probably v2.
 - Menu-bar daemon to keep the WhatsApp socket warm between Claude sessions? Deferred — only worth it if unread-lag becomes a real complaint.
 - Logging UX in the GUI — surface "last error" prominently so a user can screenshot it instead of digging through `~/Library/Logs/`.
-- Auto-update mechanism — Sparkle, GitHub Releases polling, or manual DMG distribution.
