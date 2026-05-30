@@ -39,7 +39,7 @@ The GUI is a **permanent part of the product**, not just an install-time pairing
 - **Re-pair / unlink** controls.
 - **Configure Claude Desktop** button (idempotent — safe to re-run).
 
-Default tool exposure: minimal-reasonable set on; the most invasive tools (e.g. `search_messages` across all chats) start **off** and require an explicit opt-in. Exact defaults TBD.
+**Default tool exposure: all read tools on.** The agent gets full read-only access to any conversation, including downloading audio messages, images, videos, and documents. The per-tool toggles exist for users who want to narrow the scope after the fact — not as a default-deny posture. The safety story comes from the read-only contract (the binary literally cannot write to WhatsApp), not from minimizing what's exposed.
 
 Tool exposure config persisted in `~/Library/Application Support/WhatsAppMCP/config.json`. The `--mcp` subprocess reads this on startup; changing settings while Claude is open requires a Claude restart to take effect (the subprocess re-reads on respawn).
 
@@ -71,17 +71,26 @@ WhatsAppMCP.app/
 
 ## MCP tool surface (initial)
 
+**Chats & messages**
 - `list_chats(limit, offset)`
 - `chats_overview(limit, offset)`
-- `get_chat_messages(chat_id, limit, since?, until?, from_me?)`
+- `get_chat_messages(chat_id, limit, since?, until?, from_me?)` — text + metadata only; `hasMedia` flag indicates downloadable content
 - `get_message(chat_id, message_id)`
 - `unread_summary()` — chats with unread + counts, no message bodies
 - `search_messages(query, max_chats, limit_per_chat)`
+
+**Media**
+- `list_chat_media(chat_id, type?, limit, offset)` — index of media in a chat (id, timestamp, mime, filename, caption) without downloading bodies
+- `download_media(chat_id, message_id)` — returns the media inline as MCP content (audio/image/video/document type per the message). Audio (voice notes) returned as audio content so Claude can transcribe natively.
+
+**Contacts**
 - `list_contacts(refresh?)`
 - `search_contacts(query, limit)`
 - `get_contact(chat_id)`
 
 The read-only contract is enforced by **not importing** any Baileys send/presence/read functions in the MCP server module. Even if a tool toggle were misconfigured, the code path to mutate WhatsApp state simply doesn't exist in the binary.
+
+**Media size caveat**: MCP content blocks have practical size limits (Claude's per-message context). Large videos may not fit in a single `download_media` response. `list_chat_media` exists partly to let the agent pick the right item before pulling it.
 
 ## Communication flow
 
@@ -116,10 +125,7 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 ## Open questions
 
 - App name (currently `WhatsAppMCP` as a placeholder).
-- **Default tool exposure** — which tools are on out of the box, which require opt-in. Sketch:
-  - On by default: `unread_summary`, `list_chats`, `chats_overview`, `get_contact`, `list_contacts`.
-  - Off by default: `get_chat_messages`, `get_message`, `search_messages`, `search_contacts`.
-- **Chat-level filters** — e.g. "exclude these chats/groups from any tool output". More granular than per-tool. Probably v2.
+- **Chat-level blocklist** — let the user mark specific chats/groups as off-limits so they're filtered out of every tool's response. Read-only contract holds either way; this is for privacy in specific conversations (financial, legal, etc.). Probably v2.
 - Menu-bar daemon to keep the WhatsApp socket warm between Claude sessions? Deferred — only worth it if unread-lag becomes a real complaint.
 - Logging UX in the GUI — surface "last error" prominently so a user can screenshot it instead of digging through `~/Library/Logs/`.
 - Auto-update mechanism — Sparkle, GitHub Releases polling, or manual DMG distribution.
