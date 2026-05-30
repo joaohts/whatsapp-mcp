@@ -3,11 +3,39 @@
 // controller methods; controller events are forwarded to the renderer as
 // pushes. Called from src/main/index.ts when launched without --mcp.
 
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { BackendController } from '../types/ipc';
 import { IPC, type AppInfo } from '../shared/bridge';
 import { checkForUpdate } from './updates';
+
+const RENDERER_ROOT = path.join(__dirname, '..', 'renderer');
+
+/**
+ * Serve the built renderer from app://bundle/* (the scheme is registered as
+ * privileged in index.ts, before app-ready). file:// would give the page an
+ * opaque origin that a `script-src 'self'` CSP refuses to load the bundle from;
+ * a standard+secure scheme gives a real origin (app://bundle) that 'self'
+ * matches — and it's how the packaged DMG serves the UI too. Requests are
+ * mapped to files under dist/renderer, confined to RENDERER_ROOT.
+ */
+let appProtocolRegistered = false;
+function registerAppProtocol(): void {
+  if (appProtocolRegistered) return;
+  appProtocolRegistered = true;
+  protocol.handle('app', (request) => {
+    const { pathname } = new URL(request.url);
+    const rel =
+      pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+    const resolved = path.join(RENDERER_ROOT, rel);
+    // Guard against path traversal escaping the renderer root.
+    if (resolved !== RENDERER_ROOT && !resolved.startsWith(RENDERER_ROOT + path.sep)) {
+      return new Response('Not found', { status: 404 });
+    }
+    return net.fetch(pathToFileURL(resolved).toString());
+  });
+}
 
 // While the real backend (src/backend/controller.ts) is incomplete, drive the
 // UI from the mock. Set USE_MOCK_BACKEND=false once the real one lands and is
@@ -20,7 +48,7 @@ async function createController(): Promise<BackendController> {
     return new MockBackendController();
   }
   // TODO(backend): swap in the real controller when it exists.
-  //   const { createBackendController } = await import('../backend/controller');
+  //   const { createBackendController } = await import('../backend');
   //   return createBackendController();
   const { MockBackendController } = await import('./__mock__/backend');
   return new MockBackendController();
@@ -31,6 +59,8 @@ function appInfo(): AppInfo {
 }
 
 export async function runGuiApp(): Promise<void> {
+  registerAppProtocol();
+
   const controller = await createController();
   await controller.start();
 
@@ -47,6 +77,14 @@ export async function runGuiApp(): Promise<void> {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox disabled so the preload can require the local ./shared/bridge
+      // module (constants only). A sandboxed preload may only require electron +
+      // node builtins. contextIsolation stays on, so the renderer still never
+      // touches Node or ipcRenderer directly.
+      sandbox: false,
+      // Keep rendering when the window is occluded/backgrounded so the live
+      // status + sync counts don't freeze behind other windows.
+      backgroundThrottling: false,
     },
   });
 
@@ -90,7 +128,7 @@ export async function runGuiApp(): Promise<void> {
     await win.loadURL(devServerUrl);
     win.webContents.openDevTools({ mode: 'detach' });
   } else {
-    await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    await win.loadURL('app://bundle/index.html');
   }
 
   app.on('activate', () => {

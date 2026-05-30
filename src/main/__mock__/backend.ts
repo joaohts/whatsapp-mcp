@@ -105,6 +105,10 @@ export class MockBackendController implements BackendController {
     });
   }
 
+  onPairingEvent(handler: Handler<PairingEvent>): Unsubscribe {
+    return this.pairingEvents.on(handler);
+  }
+
   async cancelPairing(): Promise<void> {
     this.clearTimers();
     if (this.status.connection === 'connecting') {

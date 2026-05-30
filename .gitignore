@@ -27,3 +27,7 @@ out/
 .idea/
 .vscode/
 *.swp
+
+# Local-only MCP server stub (backend agent owns the real one on branch `backend`).
+# Lets the gui branch type-check/run standalone; not committed to avoid merge conflicts.
+src/mcp/
