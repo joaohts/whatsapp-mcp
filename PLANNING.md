@@ -77,7 +77,8 @@ Baileys is event-driven, not query-response. It receives messages/chats/contacts
 - **Location**: `~/Library/Application Support/WhatsAppMCP/store.db`.
 - **Schema** (initial): `chats`, `messages`, `contacts`, `media_refs`. Plus an FTS5 virtual table over `messages.body` for `search_messages`.
 - **Writers**: the GUI process (when the app is open) and the `--mcp` subprocess (when Claude Desktop spawns it) both maintain Baileys connections and write to the store. Only one Baileys session can be live per linked device, so we either gate connection-ownership between the two processes or default to "MCP subprocess owns the socket, GUI just reads the store and shows status."
-- **Reads**: all MCP tools query SQLite. Even `get_chat_messages` doesn't talk to Baileys directly — it returns whatever's in the store, and optionally triggers a `fetchMessageHistory` (async event) if the user asks for older messages than we have.
+- **Reads**: all MCP tools query SQLite. `get_chat_messages` returns whatever's in the store — no implicit Baileys round-trip.
+- **Sync depth: shallow on first pair, deepen on demand.** Baileys runs with `syncFullHistory: false`, so the initial history sync covers recent activity (roughly the last few weeks for active chats) and lands in SQLite. Anything older isn't fetched until the agent explicitly asks for it via `fetch_more_history(chat_id, …)` — that tool triggers Baileys' history request, awaits the response event, persists the new rows, and reports back. **The new rows stay in the store**, so subsequent sessions inherit the deepened history without re-fetching. The agent decides when to dig (e.g. "user asked about something from last March → fetch backwards in mom's chat").
 - **Media files**: decrypted media is **not** persisted to disk by default. `download_media` calls Baileys → decrypted Buffer → returned inline as MCP content. If/when we want to cache (to avoid re-downloading for repeat queries), we'd add a `~/Library/Application Support/WhatsAppMCP/media/` directory and an LRU.
 
 ## MCP tool surface (initial)
@@ -85,10 +86,11 @@ Baileys is event-driven, not query-response. It receives messages/chats/contacts
 **Chats & messages**
 - `list_chats(limit, offset)`
 - `chats_overview(limit, offset)`
-- `get_chat_messages(chat_id, limit, since?, until?, from_me?)` — text + metadata only; `hasMedia` flag indicates downloadable content
+- `get_chat_messages(chat_id, limit, before_timestamp?, after_timestamp?, from_me?)` — reads SQLite; text + metadata only, `hasMedia` flag indicates downloadable content
 - `get_message(chat_id, message_id)`
 - `unread_summary()` — chats with unread + counts, no message bodies
-- `search_messages(query, max_chats, limit_per_chat)`
+- `search_messages(query, max_chats, limit_per_chat)` — local FTS5 over message bodies
+- `fetch_more_history(chat_id, before_timestamp?, count=50)` — deepen the local store for a chat by pulling older messages from WhatsApp via Baileys; persists to SQLite. Returns `{ fetched_count, oldest_in_store_timestamp }`. The agent calls this when `get_chat_messages` doesn't reach back far enough.
 
 **Media**
 - `list_chat_media(chat_id, type?, limit, offset)` — index of media in a chat (id, timestamp, mime, filename, caption) without downloading bodies
@@ -136,7 +138,6 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 
 ## Open questions
 
-- App name (currently `WhatsAppMCP` as a placeholder).
 - **Chat-level blocklist** — let the user mark specific chats/groups as off-limits so they're filtered out of every tool's response. Read-only contract holds either way; this is for privacy in specific conversations (financial, legal, etc.). Probably v2.
 - Menu-bar daemon to keep the WhatsApp socket warm between Claude sessions? Deferred — only worth it if unread-lag becomes a real complaint.
 - Logging UX in the GUI — surface "last error" prominently so a user can screenshot it instead of digging through `~/Library/Logs/`.
