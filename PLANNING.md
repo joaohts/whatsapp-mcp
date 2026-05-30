@@ -69,6 +69,17 @@ WhatsAppMCP.app/
 }
 ```
 
+## Storage
+
+Baileys is event-driven, not query-response. It receives messages/chats/contacts via events (`messages.upsert`, `chats.upsert`, etc.) and provides no built-in "give me message #1234" API. To answer MCP tool calls reliably — especially across Claude Desktop restarts — we need a **local persistent store**.
+
+- **Backend: SQLite** via `better-sqlite3` (synchronous, fast, embedded; ships native binary in the Electron build).
+- **Location**: `~/Library/Application Support/WhatsAppMCP/store.db`.
+- **Schema** (initial): `chats`, `messages`, `contacts`, `media_refs`. Plus an FTS5 virtual table over `messages.body` for `search_messages`.
+- **Writers**: the GUI process (when the app is open) and the `--mcp` subprocess (when Claude Desktop spawns it) both maintain Baileys connections and write to the store. Only one Baileys session can be live per linked device, so we either gate connection-ownership between the two processes or default to "MCP subprocess owns the socket, GUI just reads the store and shows status."
+- **Reads**: all MCP tools query SQLite. Even `get_chat_messages` doesn't talk to Baileys directly — it returns whatever's in the store, and optionally triggers a `fetchMessageHistory` (async event) if the user asks for older messages than we have.
+- **Media files**: decrypted media is **not** persisted to disk by default. `download_media` calls Baileys → decrypted Buffer → returned inline as MCP content. If/when we want to cache (to avoid re-downloading for repeat queries), we'd add a `~/Library/Application Support/WhatsAppMCP/media/` directory and an LRU.
+
 ## MCP tool surface (initial)
 
 **Chats & messages**
@@ -96,10 +107,11 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 
 1. User launches Claude Desktop.
 2. Claude Desktop reads `claude_desktop_config.json`, spawns `WhatsAppMCP --mcp` as a child process.
-3. MCP server loads auth state, opens a Baileys socket to WhatsApp (~2–5s).
-4. Claude calls `tools/list` → server announces the enabled tools.
-5. User asks Claude something WhatsApp-related → Claude calls `tools/call` → Baileys query → JSON response.
-6. Claude Desktop quits → SIGTERM kills the subprocess.
+3. MCP server opens the SQLite store, loads Baileys auth state, opens the WhatsApp socket (~2–5s).
+4. Baileys delivers any history sync / new messages since last connection → store gets updated via event handlers.
+5. Claude calls `tools/list` → server announces the enabled tools.
+6. User asks Claude something WhatsApp-related → Claude calls `tools/call` → server queries SQLite (and, for media, calls `downloadMediaMessage`) → JSON / binary response.
+7. Claude Desktop quits → SIGTERM closes the Baileys socket and the SQLite handle.
 
 ## Known drawbacks
 
