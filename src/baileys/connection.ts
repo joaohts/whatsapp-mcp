@@ -194,7 +194,15 @@ export class WhatsAppConnection {
       version: undefined as unknown as [number, number, number],
     }));
 
-    this.setConnState(state.creds.registered ? 'connecting' : 'connecting');
+    if (!state.creds.registered && !this.pairingMode) {
+      // No credentials and not actively pairing: we're unpaired. There is
+      // nothing to sync, so open the gate immediately — tool calls must not
+      // block waiting for a sync that will never happen.
+      this.setConnState('unpaired');
+      this.resolveInitialSync(false);
+    } else {
+      this.setConnState('connecting');
+    }
 
     const sock = makeWASocket({
       auth: state,
@@ -613,16 +621,18 @@ export class WhatsAppConnection {
     this.initialSyncTimer = setTimeout(() => this.resolveInitialSync(), 8000);
   }
 
-  private resolveInitialSync(): void {
+  private resolveInitialSync(markSynced = true): void {
     if (this.initialSyncResolved) return;
     this.initialSyncResolved = true;
     this.clearInitialSyncTimer();
-    this.lastSyncAt = nowSeconds();
-    if (this.connState === 'syncing') this.setConnState('connected');
+    if (markSynced) {
+      this.lastSyncAt = nowSeconds();
+      if (this.connState === 'syncing') this.setConnState('connected');
+      log.info('initial sync complete', this.syncCounters);
+    }
     const waiters = this.initialSyncWaiters;
     this.initialSyncWaiters = [];
     for (const w of waiters) w();
-    log.info('initial sync complete', this.syncCounters);
   }
 
   private clearInitialSyncTimer(): void {
