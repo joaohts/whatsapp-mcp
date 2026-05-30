@@ -151,6 +151,16 @@ export class Store {
       setEdited: this.db.prepare(
         `UPDATE messages SET body = @body, edited_at = @edited_at WHERE chat_id = @chat_id AND id = @id`,
       ),
+      applyLastMessage: this.db.prepare(`
+        INSERT INTO chats (id, is_group, last_message_timestamp,
+          last_message_preview, last_message_from_me)
+        VALUES (@id, @is_group, @ts, @preview, @from_me)
+        ON CONFLICT(id) DO UPDATE SET
+          last_message_timestamp = @ts,
+          last_message_preview = @preview,
+          last_message_from_me = @from_me
+        WHERE @ts >= COALESCE(chats.last_message_timestamp, 0)
+      `),
       upsertContact: this.db.prepare(`
         INSERT INTO contacts (id, name, pushname, number)
         VALUES (@id, @name, @pushname, @number)
@@ -249,6 +259,27 @@ export class Store {
       id: messageId,
       body,
       edited_at: editedAt,
+    });
+  }
+
+  /**
+   * Update a chat's last-message summary, but only if this message is at
+   * least as recent as what is already stored (so replaying old history does
+   * not clobber a newer preview). Creates the chat row if missing.
+   */
+  applyLastMessage(
+    chatId: ChatId,
+    isGroup: boolean,
+    timestamp: number,
+    preview: string | null,
+    fromMe: boolean,
+  ): void {
+    this.stmts.applyLastMessage.run({
+      id: chatId,
+      is_group: isGroup ? 1 : 0,
+      ts: timestamp,
+      preview,
+      from_me: fromMe ? 1 : 0,
     });
   }
 
