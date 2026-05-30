@@ -1,0 +1,47 @@
+{
+  "name": "whatsapp-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Read-only WhatsApp access for Claude Desktop via local MCP",
+  "license": "MIT",
+  "author": "João Henrique",
+  "homepage": "https://github.com/joaohts/whatsapp-mcp",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev:mcp": "tsx src/main/index.ts --mcp",
+    "dev:gui": "electron .",
+    "package": "electron-builder --mac --arm64"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "better-sqlite3": "^11.0.0",
+    "qrcode": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.0",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "cc.joaohts.WhatsAppMCP",
+    "productName": "WhatsAppMCP",
+    "directories": {
+      "buildResources": "build"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
+      ]
+    }
+  }
+}
