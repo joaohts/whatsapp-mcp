@@ -45,8 +45,46 @@ You are the **GUI agent** for the WhatsApp MCP project. Your job is to build the
 - Pairing UX: see `PLANNING.md` → `Pairing UX (target)` for the exact steps.
 - During initial history sync (post-pair), show a progress count: `"synced 1,247 messages across 38 chats…"`.
 - Settings panel must reflect `TOOLS[i].enabledByDefault` for fresh installs and read/write `UserConfig.enabled_tools` via the backend.
-- The "Configure Claude Desktop" button writes the `mcpServers.whatsapp` block into `~/Library/Application Support/Claude/claude_desktop_config.json` — must be idempotent.
+- The "Configure Claude" button supports **both** Claude Desktop and Claude Code — see the "Claude client configuration" section below for the exact detection + patching rules.
 - Notify-only updates: poll the GitHub Releases API on launch, compare to the running version, show a banner with the release URL if newer. Don't auto-download.
+
+## Claude client configuration
+
+The product works with **both** Claude Desktop and Claude Code. They speak the same stdio MCP protocol and use the same `mcpServers.<name>.{command, args}` config shape — they just store the config in different files. The GUI's "Configure Claude" button must detect which clients are installed and patch whichever it finds.
+
+**Detection:**
+
+| Client | Detected by | Config file to patch |
+|---|---|---|
+| Claude Desktop | `/Applications/Claude.app` exists | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Code | `~/.claude.json` exists, or `claude` is on `PATH` | `~/.claude.json` |
+
+**Patching rules:**
+
+- The block to write is always:
+  ```json
+  {
+    "mcpServers": {
+      "whatsapp": {
+        "command": "/Applications/WhatsAppMCP.app/Contents/MacOS/WhatsAppMCP",
+        "args": ["--mcp"]
+      }
+    }
+  }
+  ```
+- **Idempotent**: read the existing JSON, merge our `whatsapp` key into `mcpServers` without clobbering other servers the user may have configured, write back. Re-clicking the button must be safe.
+- If the config file doesn't exist yet, create it with just `{ "mcpServers": { "whatsapp": ... } }`.
+- Preserve formatting where reasonable (2-space indent is fine).
+
+**Button label + behavior by state:**
+
+- Neither installed → button disabled, message: *"Install Claude Desktop or Claude Code first."*
+- Only Desktop → button reads *"Configure Claude Desktop"*. On click: patch and show success.
+- Only Code → button reads *"Configure Claude Code"*.
+- Both installed → button reads *"Configure Claude"*. On click: patch both files and show *"Configured Claude Desktop + Claude Code"*.
+- After success in any case: *"Restart Claude, then ask 'what are my unread WhatsApp chats?'"*.
+
+**Re-detection**: re-check on every open of the settings page, not just app launch. A user might install Claude Code after first running our app.
 
 ## How to test your slice independently
 

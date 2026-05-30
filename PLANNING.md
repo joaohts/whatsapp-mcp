@@ -6,7 +6,7 @@ A lay-friendly macOS app that exposes **read-only WhatsApp** to local Claude Des
 
 - **Zero-prereq install** — no Homebrew, no Node, no Terminal, no Docker.
 - **Fully local, no tracking.** All WhatsApp data + auth state stays on the user's Mac. No telemetry, no crash reporting, no analytics, no third-party servers. The only outbound traffic is to WhatsApp itself (unavoidable, protocol) and to GitHub (only for the update-check poll).
-- **Works with Claude Desktop** (primary target). Claude Code support is a bonus.
+- **Works with any local MCP-capable Claude client** — Claude Desktop and Claude Code. Both speak stdio MCP and accept the same `mcpServers.<name>.{command, args}` config shape; they just store it at different paths.
 - **Read-only**: zero side-effects on the user's WhatsApp account (no send, no read receipts, no presence changes, no typing indicators).
 
 ### Out of scope
@@ -29,7 +29,10 @@ A lay-friendly macOS app that exposes **read-only WhatsApp** to local Claude Des
 - **No code signing for v1.** First launch shows the Gatekeeper warning; the user right-clicks → Open once, and macOS remembers the approval forever after. Signed + notarized ($99/yr Apple Developer) deferred until friction is real.
 - **Auth state lives outside the bundle**: `~/Library/Application Support/WhatsAppMCP/auth/` so it survives reinstalls / app updates.
 - **Logs**: `~/Library/Logs/WhatsAppMCP/` so debugging the headless `--mcp` mode is possible.
-- **Claude Desktop config patching**: the GUI has a "Configure Claude Desktop" button that idempotently writes the `mcpServers.whatsapp` block into `~/Library/Application Support/Claude/claude_desktop_config.json`. The user never edits JSON.
+- **Claude client config patching**: the GUI has a "Configure Claude" button that detects which clients are installed and idempotently writes the `mcpServers.whatsapp` block to each one's config. The user never edits JSON.
+  - Claude Desktop → `~/Library/Application Support/Claude/claude_desktop_config.json` (detected by `/Applications/Claude.app` existing).
+  - Claude Code → `~/.claude.json` (detected by the file existing or by `claude` being on `PATH`).
+  - If only one is installed, patch that one and label the button accordingly. If both, patch both. If neither, surface a "Install Claude Desktop or Claude Code first" message.
 - **Updates: notify-only.** On launch, the GUI polls the GitHub Releases API for the latest tag and compares to the running version. If newer, shows a non-intrusive banner with a link to the release page (and a "remind me later" option). The user downloads the new DMG and drag-replaces; auth state and store survive. No silent auto-install — keeps complexity out of v1 and respects the unsigned status. Sparkle is the v2 upgrade path if drag-replacing becomes painful.
 
 ### Build & distribution
@@ -80,7 +83,9 @@ WhatsAppMCP.app/
 ~/Library/Logs/WhatsAppMCP/
 └── mcp.log                            ← --mcp mode logs
 
-~/Library/Application Support/Claude/claude_desktop_config.json:
+Same block written to whichever Claude client(s) are present:
+- Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json
+- Claude Code:    ~/.claude.json
 {
   "mcpServers": {
     "whatsapp": {
@@ -129,13 +134,13 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 
 ## Communication flow
 
-1. User launches Claude Desktop.
-2. Claude Desktop reads `claude_desktop_config.json`, spawns `WhatsAppMCP --mcp` as a child process.
+1. User launches Claude Desktop or Claude Code.
+2. That client reads its MCP config, spawns `WhatsAppMCP --mcp` as a child process.
 3. MCP server opens the SQLite store, loads Baileys auth state, opens the WhatsApp socket (~2–5s).
 4. Baileys delivers any history sync / new messages since last connection → store gets updated via event handlers.
 5. Claude calls `tools/list` → server announces the enabled tools.
 6. User asks Claude something WhatsApp-related → Claude calls `tools/call` → server queries SQLite (and, for media, calls `downloadMediaMessage`) → JSON / binary response.
-7. Claude Desktop quits → SIGTERM closes the Baileys socket and the SQLite handle.
+7. The client quits → SIGTERM closes the Baileys socket and the SQLite handle.
 
 ## Known drawbacks
 
@@ -156,7 +161,7 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 3. **Pairing code path**: enter phone number → app displays an 8-character code → instructions: open WhatsApp → Settings → Linked Devices → Link a Device → "Link with phone number instead" → enter code.
 4. **QR code path**: app displays a QR → user opens WhatsApp → Settings → Linked Devices → Link a Device → scans.
 5. Either way: socket completes → GUI shows initial history sync progress (spinner + running count "synced 1,247 messages across 38 chats…") → "✓ Connected as [name]" → auth state saved.
-6. "Configure Claude Desktop" button → patches MCP config → "Restart Claude Desktop, then ask 'what are my unread WhatsApp chats?'"
+6. "Configure Claude" button → detects installed clients (Desktop, Code, or both) → patches MCP config for each → "Restart Claude, then ask 'what are my unread WhatsApp chats?'"
 
 ## Open questions
 
