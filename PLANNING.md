@@ -37,6 +37,16 @@ A lay-friendly macOS app that exposes **read-only WhatsApp** to local Claude Des
 - **arm64-only binary.** Halves DMG size and build time. Intel Mac users (rare by 2026) can request a build manually if needed.
 - **Public GitHub repo**: `github.com/joaohts/whatsapp-mcp` (not pushed yet — pending explicit go-ahead).
 
+### Socket ownership
+
+Baileys keeps **one WebSocket per linked device**. WhatsApp boots the older session if two processes claim the same device, so exactly one of GUI / MCP-subprocess owns the live socket at any moment.
+
+- **MCP subprocess is the default owner** when Claude Desktop is open. No background daemon, no autorun-at-login.
+- **GUI grabs the socket exclusively** only when needed: during pairing, or when the user clicks "Sync now" / opens the status page.
+- **If MCP starts while GUI has the socket, GUI yields immediately.**
+- **Initial sync blocks tool responses.** When the MCP subprocess starts, it waits for the Baileys initial history sync to complete before responding to `tools/call`. The first call after Claude Desktop launch is ~3–5s slower; everything after that is real-time fresh because Baileys pushes new messages live for the rest of the session.
+- **Trade-off accepted**: the WA session is dormant when Claude Desktop is closed. Unread counts are caught up automatically on next launch, never returned wrong — just delayed by the sync window. Model A (24/7 daemon) is the v2 upgrade if this ever becomes a real complaint.
+
 ### Pairing
 
 - **Support both pairing code AND QR code.** Pairing code is the default (no camera needed, friendlier for users already holding their phone). QR code as a secondary tab for users who prefer it or hit edge cases.
@@ -88,7 +98,7 @@ Baileys is event-driven, not query-response. It receives messages/chats/contacts
 - **Backend: SQLite** via `better-sqlite3` (synchronous, fast, embedded; ships native binary in the Electron build).
 - **Location**: `~/Library/Application Support/WhatsAppMCP/store.db`.
 - **Schema** (initial): `chats`, `messages`, `contacts`, `media_refs`. Plus an FTS5 virtual table over `messages.body` for `search_messages`.
-- **Writers**: only the process that currently owns the Baileys socket writes to the store. Ownership coordination is pending — see "Socket ownership models" below.
+- **Writers**: only the process that currently owns the Baileys socket writes to the store. Default writer is the MCP subprocess; see "Socket ownership" in Decisions.
 - **Reads**: all MCP tools query SQLite. `get_chat_messages` returns whatever's in the store — no implicit Baileys round-trip.
 - **Sync depth: shallow on first pair, deepen on demand.** Baileys runs with `syncFullHistory: false`, so the initial history sync covers recent activity (roughly the last few weeks for active chats) and lands in SQLite. Anything older isn't fetched until the agent explicitly asks for it via `fetch_more_history(chat_id, …)` — that tool triggers Baileys' history request, awaits the response event, persists the new rows, and reports back. **The new rows stay in the store**, so subsequent sessions inherit the deepened history without re-fetching. The agent decides when to dig (e.g. "user asked about something from last March → fetch backwards in mom's chat").
 - **Media files**: decrypted media is **not** persisted to disk by default. `download_media` calls Baileys → decrypted Buffer → returned inline as MCP content. If/when we want to cache (to avoid re-downloading for repeat queries), we'd add a `~/Library/Application Support/WhatsAppMCP/media/` directory and an LRU.
@@ -108,10 +118,10 @@ Baileys is event-driven, not query-response. It receives messages/chats/contacts
 - `list_chat_media(chat_id, type?, limit, offset)` — index of media in a chat (id, timestamp, mime, filename, caption) without downloading bodies
 - `download_media(chat_id, message_id)` — returns the media inline as MCP content (audio/image/video/document type per the message). Audio (voice notes) returned as audio content so Claude can transcribe natively.
 
-**Contacts**
+**Contacts & groups**
 - `list_contacts(refresh?)`
 - `search_contacts(query, limit)`
-- `get_contact(chat_id)`
+- `get_contact(chat_id)` — **polymorphic**: for `@c.us` IDs returns direct-contact fields (`name`, `pushname`, `number`, `profile_url`?); for `@g.us` IDs returns group fields (`subject`, `description`, `created_at`, `participants[]`, `admins[]`, `only_admins_can_send`). The response shape varies by ID type; the agent handles both.
 
 The read-only contract is enforced by **not importing** any Baileys send/presence/read functions in the MCP server module. Even if a tool toggle were misconfigured, the code path to mutate WhatsApp state simply doesn't exist in the binary.
 
@@ -150,27 +160,6 @@ The read-only contract is enforced by **not importing** any Baileys send/presenc
 
 ## Open questions
 
-- **Socket ownership** when GUI and MCP subprocess overlap — only one Baileys connection can be live per linked device. Three models on the table (see "Socket ownership models" below), still to be picked.
-- **Group info tool shape** — separate `get_group_info(chat_id)` vs folded into a polymorphic `get_contact`. Still to be picked.
 - **Chat-level blocklist** — v2. Let the user mark specific chats/groups as off-limits so they're filtered out of every tool's response.
-- **Menu-bar daemon** to keep the WhatsApp socket warm between Claude sessions — deferred, only worth it if unread-lag becomes a real complaint.
+- **Menu-bar daemon** to keep the WhatsApp socket warm between Claude sessions — deferred, only worth it if unread-lag becomes a real complaint (i.e. graduate to Model A).
 - **Logging UX in the GUI** — surface "last error" prominently so a user can screenshot it instead of digging through `~/Library/Logs/`.
-
-## Socket ownership models (pending)
-
-Baileys keeps **one WebSocket per linked device**. WhatsApp will boot the older session if two processes try to be the same device. So when GUI and MCP subprocess are both running, exactly one of them owns the live socket. SQLite is the shared layer either way (it supports multi-reader / single-writer).
-
-**Model A — GUI owns the socket; MCP is read-only against the store.**
-GUI runs as a background app (LaunchAgent or just always-open), holds Baileys 24/7, writes to SQLite continuously. MCP subprocess opens SQLite read-only and queries it. For `download_media` and `fetch_more_history`, MCP IPC's into the GUI (local Unix socket).
-- ✅ WA session always live → unread counts always fresh, no Claude-launch reconnect lag, history sync happens continuously.
-- ❌ Needs autorun-at-login. More processes always running. IPC complication for media + history fetch.
-
-**Model B — Hand-off via file lock.**
-File lock at `~/Library/Application Support/WhatsAppMCP/socket.lock` decides who has Baileys. Default holder is the GUI (if running); when MCP subprocess starts, it IPC's the GUI to drop the lock, MCP takes over. When MCP exits, GUI re-acquires.
-- ✅ Graceful handoff; always-fresh when GUI is running.
-- ❌ Handoff dance is fiddly. Reconnect latency at each handoff (disconnect + reconnect). Many edge cases (stale lock, both crash, etc).
-
-**Model C — MCP owns the socket when Claude is open; GUI only owns it during pairing / explicit "Sync now".**
-Default owner is MCP subprocess. GUI gets the socket exclusively during pairing or when the user clicks "Sync now" / opens the status page. If MCP starts while GUI has it, GUI yields immediately.
-- ✅ Simplest mental model. No autorun. Most of the time only one process is running anyway. Matches the "drag-and-drop, no daemon" promise.
-- ❌ WA session is dormant when Claude is closed → unread counts only refresh when Claude is open (already listed as a known drawback).
