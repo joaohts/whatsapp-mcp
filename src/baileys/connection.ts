@@ -190,6 +190,20 @@ export class WhatsAppConnection {
 
   private async connectSocket(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+    // Seed account from auth state so the GUI's very first status read shows
+    // paired_account correctly even before Baileys finishes connecting to WA.
+    // Without this, the renderer reads paired_account:null at startup and
+    // routes to PairingWizard; the route decision is made once and sticks
+    // even after this.account is set later in onConnectionUpdate.
+    if (!this.account && state.creds.me?.id) {
+      const number = state.creds.me.id.split(':')[0].split('@')[0];
+      this.account = {
+        name: state.creds.me.name || number,
+        number,
+      };
+    }
+
     const { version } = await fetchLatestBaileysVersion().catch(() => ({
       version: undefined as unknown as [number, number, number],
     }));
