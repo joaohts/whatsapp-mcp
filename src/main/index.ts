@@ -10,6 +10,13 @@
 const isMcpMode = process.argv.includes('--mcp');
 
 if (isMcpMode) {
+  // Headless: no window, and on macOS hide the dock icon so the user
+  // doesn't see a stray Electron icon hanging around whenever Claude
+  // Desktop is open. Must be called before app-ready.
+  if (process.platform === 'darwin') {
+    const { app } = require('electron') as typeof import('electron');
+    app.dock?.hide();
+  }
   void import('../mcp/server').then(({ runMcpServer }) => runMcpServer());
 } else {
   const { app, protocol } = require('electron') as typeof import('electron');
