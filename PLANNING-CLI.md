@@ -27,8 +27,20 @@ Technical users who already have Node ≥ 20 (which everyone running Claude Code
 
 ### Pairing in the terminal
 
-- QR mode: ASCII QR rendered to stderr via `qrcode-terminal` (so stdout stays clean for scripting).
-- Code mode: prints the 8-character code formatted as `XXXX-XXXX` with instructions on where to enter it on the phone.
+- **QR mode**:
+  - Renders ASCII QR to stderr via `qrcode-terminal` for interactive use.
+  - **Also writes a PNG of the current QR to `~/.whatsapp-mcp/pairing-qr.png`** so agent-driven flows can `Read` the file to display the QR inline to the user. WhatsApp rotates the QR every ~60s; the PNG is overwritten on each rotation.
+  - With `--yes`, the ASCII QR is suppressed (noise in agent transcripts); the PNG is the only artifact.
+- **Code mode**: prints the 8-character code formatted as `XXXX-XXXX` with instructions on where to enter it on the phone.
+
+### Agent contract for QR
+
+When an agent runs `whatsapp-mcp setup --yes` and falls back to QR mode (no `--phone` provided), it should:
+
+1. Tell the user pairing is starting and the QR will appear shortly.
+2. Read `~/.whatsapp-mcp/pairing-qr.png` and display it (Claude Code renders images inline from `Read`).
+3. Re-read the file every ~30s while pairing is pending — the QR rotates.
+4. Stop reading once `setup` exits successfully.
 
 ### Claude Code integration
 

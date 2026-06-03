@@ -1,20 +1,31 @@
 // Terminal pairing flow. Drives the existing WhatsAppConnection's
 // startPairing() and renders pairing events to stdout / stderr.
 //
-// - QR mode: renders QR as ASCII via qrcode-terminal
-// - Code mode: prints the 8-character pairing code prominently
+// - QR mode: renders QR as ASCII via qrcode-terminal (interactive use) AND
+//   saves a PNG of the latest QR to ~/.whatsapp-mcp/pairing-qr.png so
+//   agent-driven flows can `Read` the file to display the QR inline in chat.
+//   WhatsApp rotates the QR ~every 60s; the PNG is overwritten on each
+//   rotation, so the file always reflects the current valid QR.
+// - Code mode: prints the 8-character pairing code prominently.
 //
 // Returns when the socket reports either success or unrecoverable error.
 
 import './env';
 import { Store } from '../store';
 import { WhatsAppConnection } from '../baileys';
-import { ensureAppDirs, storeDbPath, configPath } from '../backend/paths';
+import {
+  appSupportDir,
+  ensureAppDirs,
+  storeDbPath,
+  configPath,
+} from '../backend/paths';
 import { existsSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import * as qrcodePng from 'qrcode';
 import { defaultConfig } from '../backend/config';
 import type { PairingEvent } from '../types/ipc';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const qrcode = require('qrcode-terminal') as {
+const qrcodeTerminal = require('qrcode-terminal') as {
   generate: (data: string, opts: { small: boolean }, cb: (out: string) => void) => void;
 };
 
@@ -22,10 +33,16 @@ export interface PairOptions {
   method: 'qr' | 'code';
   /** Required when method === 'code'. E.164 without spaces or '+'. */
   phoneE164?: string;
+  /** If true, suppress the ASCII QR (still writes the PNG). For agent runs. */
+  suppressAsciiQr?: boolean;
 }
 
 export interface PairResult {
   account: { name: string; number: string };
+}
+
+export function qrPngPath(): string {
+  return join(appSupportDir, 'pairing-qr.png');
 }
 
 function ensureConfigFile(): void {
@@ -34,11 +51,16 @@ function ensureConfigFile(): void {
   }
 }
 
-function renderQr(payload: string): void {
-  qrcode.generate(payload, { small: true }, (out) => {
-    // Write to stderr so stdout stays clean for any wrapping script.
+function renderAsciiQr(payload: string): void {
+  qrcodeTerminal.generate(payload, { small: true }, (out) => {
     process.stderr.write('\n' + out + '\n');
   });
+}
+
+async function writeQrPng(payload: string): Promise<string> {
+  const path = qrPngPath();
+  await qrcodePng.toFile(path, payload, { width: 512, margin: 2 });
+  return path;
 }
 
 function renderCode(code: string): void {
@@ -57,36 +79,46 @@ export async function pair(opts: PairOptions): Promise<PairResult> {
   const connection = new WhatsAppConnection(store);
 
   return await new Promise<PairResult>((resolve, reject) => {
-    const unsubscribe = connection.on(
-      'pairing',
-      (e: PairingEvent) => {
-        switch (e.kind) {
-          case 'qr':
-            renderQr(e.payload);
-            break;
-          case 'code':
-            renderCode(e.code);
-            break;
-          case 'success':
-            process.stderr.write(
-              `\n  Linked as ${e.account.name} (${e.account.number}).\n`,
-            );
-            unsubscribe();
-            resolve({ account: e.account });
-            break;
-          case 'error':
-            unsubscribe();
-            reject(new Error(e.message));
-            break;
-        }
-      },
-    );
+    const unsubscribe = connection.on('pairing', (e: PairingEvent) => {
+      switch (e.kind) {
+        case 'qr':
+          // Always write the PNG so agents (or the user) can open / Read it.
+          // Errors here are non-fatal — fall back to ASCII only.
+          writeQrPng(e.payload)
+            .then((path) => {
+              process.stderr.write(
+                `\n  QR saved to: ${path}\n` +
+                  '  Open it (Preview will auto-launch with `open <path>`) and scan with WhatsApp\n' +
+                  '  on your phone → Settings → Linked Devices → Link a Device.\n',
+              );
+            })
+            .catch(() => {
+              /* non-fatal */
+            });
+          if (!opts.suppressAsciiQr) {
+            renderAsciiQr(e.payload);
+          }
+          break;
+        case 'code':
+          renderCode(e.code);
+          break;
+        case 'success':
+          process.stderr.write(
+            `\n  Linked as ${e.account.name} (${e.account.number}).\n`,
+          );
+          unsubscribe();
+          resolve({ account: e.account });
+          break;
+        case 'error':
+          unsubscribe();
+          reject(new Error(e.message));
+          break;
+      }
+    });
 
-    connection
-      .startPairing(opts)
-      .catch((err: unknown) => {
-        unsubscribe();
-        reject(err instanceof Error ? err : new Error(String(err)));
-      });
+    connection.startPairing(opts).catch((err: unknown) => {
+      unsubscribe();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    });
   });
 }

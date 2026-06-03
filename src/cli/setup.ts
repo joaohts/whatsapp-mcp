@@ -11,7 +11,7 @@ import './env';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 import * as readline from 'readline';
-import { pair, type PairOptions } from './pair';
+import { pair, qrPngPath, type PairOptions } from './pair';
 import { planPatch, applyPatch } from './claude-code-config';
 
 export interface SetupOptions {
@@ -73,6 +73,19 @@ function resolveServeCommand(): { command: string; args: string[] } {
 
 export async function setup(opts: SetupOptions): Promise<void> {
   const pairOpts = await chooseMethod(opts);
+
+  // In --yes (agent) mode with QR, suppress the ASCII QR — it's noise in the
+  // tool transcript. The PNG at qrPngPath() is what the agent should show the
+  // user (e.g. by Read-ing the file path).
+  if (opts.yes && pairOpts.method === 'qr') {
+    pairOpts.suppressAsciiQr = true;
+    process.stderr.write(
+      '\n→ Pairing via QR. A PNG of the current QR will be written to:\n' +
+        `    ${qrPngPath()}\n` +
+        '  WhatsApp rotates the QR every ~60s; the file is overwritten on each\n' +
+        '  rotation. To show the QR to the user, read the file at that path.\n',
+    );
+  }
 
   process.stderr.write('\n→ Starting pairing…\n');
   const result = await pair(pairOpts);
