@@ -21,6 +21,7 @@ import {
 } from '../backend/paths';
 import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { spawn } from 'child_process';
 import * as qrcodePng from 'qrcode';
 import { defaultConfig } from '../backend/config';
 import type { PairingEvent } from '../types/ipc';
@@ -35,6 +36,8 @@ export interface PairOptions {
   phoneE164?: string;
   /** If true, suppress the ASCII QR (still writes the PNG). For agent runs. */
   suppressAsciiQr?: boolean;
+  /** If true, don't run `open` on the QR PNG (default: open on first QR). */
+  noOpenQr?: boolean;
 }
 
 export interface PairResult {
@@ -63,6 +66,17 @@ async function writeQrPng(payload: string): Promise<string> {
   return path;
 }
 
+function openInPreview(path: string): void {
+  // macOS-only. Fire and forget — failures are non-fatal (user can `open`
+  // manually). spawn with detached + unref so we don't hold a child handle.
+  try {
+    const child = spawn('open', [path], { stdio: 'ignore', detached: true });
+    child.unref();
+  } catch {
+    /* non-fatal */
+  }
+}
+
 function renderCode(code: string): void {
   const pretty = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
   process.stderr.write('\n  Pairing code: \x1b[1m' + pretty + '\x1b[0m\n');
@@ -78,19 +92,35 @@ export async function pair(opts: PairOptions): Promise<PairResult> {
   const store = new Store(storeDbPath);
   const connection = new WhatsAppConnection(store);
 
+  let openedQrOnce = false;
+
   return await new Promise<PairResult>((resolve, reject) => {
     const unsubscribe = connection.on('pairing', (e: PairingEvent) => {
       switch (e.kind) {
         case 'qr':
-          // Always write the PNG so agents (or the user) can open / Read it.
-          // Errors here are non-fatal — fall back to ASCII only.
+          // Write the PNG. On the first QR, auto-launch Preview so the user
+          // doesn't need any image-rendering chat UI. On rotations
+          // (~every 60s), overwrite the file — Preview will keep showing
+          // the first QR, but the file on disk is current if the user
+          // re-opens it.
           writeQrPng(e.payload)
             .then((path) => {
               process.stderr.write(
-                `\n  QR saved to: ${path}\n` +
-                  '  Open it (Preview will auto-launch with `open <path>`) and scan with WhatsApp\n' +
-                  '  on your phone → Settings → Linked Devices → Link a Device.\n',
+                `\n  QR saved to: ${path}\n`,
               );
+              if (!opts.noOpenQr && !openedQrOnce) {
+                openInPreview(path);
+                openedQrOnce = true;
+                process.stderr.write(
+                  '  Opened in Preview. Scan with WhatsApp on your phone →\n' +
+                    '  Settings → Linked Devices → Link a Device. If the QR\n' +
+                    '  expires (after ~60s), run `open ' + path + '` to refresh.\n',
+                );
+              } else if (opts.noOpenQr) {
+                process.stderr.write(
+                  '  To display: `open ' + path + '` or read the file in your client.\n',
+                );
+              }
             })
             .catch(() => {
               /* non-fatal */

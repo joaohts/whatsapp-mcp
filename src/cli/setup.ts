@@ -75,15 +75,14 @@ export async function setup(opts: SetupOptions): Promise<void> {
   const pairOpts = await chooseMethod(opts);
 
   // In --yes (agent) mode with QR, suppress the ASCII QR — it's noise in the
-  // tool transcript. The PNG at qrPngPath() is what the agent should show the
-  // user (e.g. by Read-ing the file path).
+  // tool transcript. The CLI will auto-open the PNG in Preview, which is how
+  // the user actually sees the QR on shared (local) Macs.
   if (opts.yes && pairOpts.method === 'qr') {
     pairOpts.suppressAsciiQr = true;
     process.stderr.write(
-      '\n→ Pairing via QR. A PNG of the current QR will be written to:\n' +
+      '\n→ Pairing via QR. The QR will be written to and opened from:\n' +
         `    ${qrPngPath()}\n` +
-        '  WhatsApp rotates the QR every ~60s; the file is overwritten on each\n' +
-        '  rotation. To show the QR to the user, read the file at that path.\n',
+        '  macOS Preview will pop up with the QR. The user scans it with WhatsApp.\n',
     );
   }
 

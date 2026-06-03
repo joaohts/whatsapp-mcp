@@ -29,18 +29,14 @@ Technical users who already have Node ≥ 20 (which everyone running Claude Code
 
 - **QR mode**:
   - Renders ASCII QR to stderr via `qrcode-terminal` for interactive use.
-  - **Also writes a PNG of the current QR to `~/.whatsapp-mcp/pairing-qr.png`** so agent-driven flows can `Read` the file to display the QR inline to the user. WhatsApp rotates the QR every ~60s; the PNG is overwritten on each rotation.
-  - With `--yes`, the ASCII QR is suppressed (noise in agent transcripts); the PNG is the only artifact.
+  - **Writes a PNG of the current QR to `~/.whatsapp-mcp/pairing-qr.png`**.
+  - **Auto-opens that PNG in macOS Preview on the first QR event** (so the user sees a real QR regardless of whether their terminal or chat UI renders images inline). Subsequent rotations overwrite the file silently — Preview will keep showing the first QR until the user re-runs `open <path>`. In practice the user scans within seconds of the first display, so this is fine.
+  - With `--yes`, the ASCII QR is suppressed (noise in agent transcripts).
 - **Code mode**: prints the 8-character code formatted as `XXXX-XXXX` with instructions on where to enter it on the phone.
 
 ### Agent contract for QR
 
-When an agent runs `whatsapp-mcp setup --yes` and falls back to QR mode (no `--phone` provided), it should:
-
-1. Tell the user pairing is starting and the QR will appear shortly.
-2. Read `~/.whatsapp-mcp/pairing-qr.png` and display it (Claude Code renders images inline from `Read`).
-3. Re-read the file every ~30s while pairing is pending — the QR rotates.
-4. Stop reading once `setup` exits successfully.
+When a Claude Code agent runs `whatsapp-mcp setup --yes` and falls back to QR mode (no `--phone` provided), the CLI automatically opens the QR in Preview on the user's Mac (the agent and the user share the same machine, since this is all local). The agent doesn't need to do anything beyond invoking the command. If the agent's chat UI also renders inline images, it can additionally `Read` `~/.whatsapp-mcp/pairing-qr.png` to embed the QR in the transcript — but that's belt-and-suspenders, not required.
 
 ### Claude Code integration
 
