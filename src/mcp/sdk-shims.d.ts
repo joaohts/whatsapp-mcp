@@ -14,6 +14,13 @@ declare module '@modelcontextprotocol/sdk/server/index.js' {
   }
   export interface ServerOptions {
     capabilities: Record<string, unknown>;
+    /**
+     * Server-level instructions sent in the initialize response. The MCP
+     * client folds these into its system prompt for the session. Used here
+     * for the prompt-injection posture note covering untrusted message
+     * content; see SERVER_INSTRUCTIONS_UNTRUSTED in src/types/tools.ts.
+     */
+    instructions?: string;
   }
   export class Server {
     constructor(info: ServerInfo, options: ServerOptions);

@@ -9,7 +9,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { TOOLS, type ToolName } from '../types/tools';
+import { TOOLS, SERVER_INSTRUCTIONS_UNTRUSTED, type ToolName } from '../types/tools';
 import { Store } from '../store';
 import { WhatsAppConnection } from '../baileys';
 import { ensureAppDirs, storeDbPath, mcpLogPath } from '../backend/paths';
@@ -44,7 +44,13 @@ export async function runMcpServer(): Promise<void> {
 
   const server = new Server(
     { name: 'whatsapp', version: APP_VERSION },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {} },
+      // Per-session prompt-injection posture note. Folded into the client's
+      // system prompt during the initialize handshake; covers every tool in
+      // this server so individual tool descriptions stay clean.
+      instructions: SERVER_INSTRUCTIONS_UNTRUSTED,
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
