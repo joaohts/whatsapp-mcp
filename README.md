@@ -33,7 +33,7 @@ Two install paths:
 
 ## Showing the QR — three modes
 
-WhatsApp pairing-by-QR rotates a new code every ~60s. The CLI supports three ways for the user to see it; choose based on context.
+WhatsApp pairing-by-QR rotates a new code every ~60s. The CLI supports four ways for the user to see it; choose based on context.
 
 ### 1. `open` → macOS Preview (default)
 
@@ -58,18 +58,31 @@ Open a second terminal next to the one running `setup` and run:
 whatsapp-mcp watch-qr
 ```
 
-- **Best UX for QR rotation**: re-renders every time WhatsApp pushes a new code, exits cleanly when pairing completes.
-- **Best when an agent is driving `setup`**: the agent doesn't pollute its own transcript with ASCII or images; the user sees the QR in a dedicated window.
+- **Best UX for QR rotation in CLI Claude Code**: re-renders every time WhatsApp pushes a new code, exits cleanly when pairing completes.
+- **Best when an agent is driving `setup`** in a transcript that won't render images: the user sees the QR in a dedicated window.
+
+### 4. Inline image via `Read` (Claude Code desktop)
+
+In the **Claude Code desktop app**, the agent can `Read ~/.whatsapp-mcp/pairing-qr.png` and the image renders directly in the chat transcript. Verified to work — `Read` of a PNG outputs an inline image.
+
+- **Cleanest UX for Claude Code desktop specifically**: no separate window, no terminal switching, the QR appears right where the agent's response lives.
+- **The file is overwritten on each rotation** (~60s), so the agent should re-`Read` every ~30s while pairing is pending.
+- **Does NOT work in CLI Claude Code** (terminal-only client doesn't render image output) — fall back to modes 1 or 3 there.
 
 ### Agent guidance
 
-When a Claude Code agent runs `setup --yes` and the flow falls back to QR (no `--phone`), it should:
+Pick the mode based on the agent's client:
 
-1. Tell the user: *"I'll run `whatsapp-mcp setup --yes`. Preview will pop up with the QR. If you'd prefer a live-updating ASCII QR instead, open a new terminal and run `whatsapp-mcp watch-qr` before I start."*
-2. Run `setup --yes`. The auto-`open` (mode 1) handles the user-side display by default.
-3. The user scans → pairing completes → setup returns.
+- **Claude Code desktop** → mode 4 (`Read` the PNG inline). Pair with mode 1 as a fallback — the auto-`open` runs anyway and gives the user a Preview window too.
+- **Claude Code CLI** (terminal) → mode 1 (auto-Preview, already runs) + suggest mode 3 (`watch-qr` in another tab) for users who prefer ASCII in a terminal that handles QR rendering well.
+- **Unknown / other client** → trust mode 1. Tell the user: *"Preview will pop up with the QR — scan it from your phone."*
 
-Agents that *know* their chat UI can render images inline can additionally `Read` `~/.whatsapp-mcp/pairing-qr.png` to embed the QR in the transcript. The file is overwritten on each rotation, so re-reading every ~30s shows the current QR.
+Concrete flow for a Claude Code desktop agent running `setup --yes` with no `--phone`:
+
+1. Run `setup --yes`. The CLI auto-opens Preview (mode 1) as a safety net.
+2. `Read ~/.whatsapp-mcp/pairing-qr.png` to show the QR inline in chat.
+3. Wait ~30s; if pairing hasn't completed, `Read` the file again — the PNG has been overwritten with the rotated QR.
+4. Repeat until `setup` returns success.
 
 ## Status
 
