@@ -9,9 +9,12 @@
   "main": "dist/main/index.js",
   "scripts": {
     "build": "tsc",
+    "build:renderer": "vite build",
+    "build:all": "npm run build && npm run build:renderer",
     "dev:mcp": "tsx src/main/index.ts --mcp",
-    "dev:gui": "electron .",
-    "package": "electron-builder --mac --arm64"
+    "dev:renderer": "vite",
+    "dev:gui": "npm run build && npm run build:renderer && electron .",
+    "package": "npm run build:all && electron-builder --mac --arm64"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -23,10 +26,16 @@
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "@types/qrcode": "^1.5.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
     "electron": "^34.0.0",
     "electron-builder": "^25.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vite": "^6.0.0"
   },
   "build": {
     "appId": "cc.joaohts.WhatsAppMCP",
@@ -34,6 +43,13 @@
     "directories": {
       "buildResources": "build"
     },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
