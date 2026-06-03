@@ -210,7 +210,15 @@ export class WhatsAppConnection {
       logger: makeBaileysLogger('warn') as never,
       browser: Browsers.macOS('WhatsAppMCP'),
       markOnlineOnConnect: false, // never announce presence (read-only)
-      syncFullHistory: false, // shallow first sync; deepen on demand
+      // We want a shallow sync: tell WA we're not a full-history client
+      // (so it doesn't push years of messages), but ALSO override Baileys'
+      // default shouldSyncHistoryMessage — its default is literally
+      // `() => !!syncFullHistory`, so leaving it alone with
+      // syncFullHistory:false makes Baileys skip the post-pair history
+      // wait entirely and the store stays empty. Returning true here makes
+      // Baileys process whatever shallow backlog WA sends.
+      syncFullHistory: false,
+      shouldSyncHistoryMessage: () => true,
       printQRInTerminal: false,
       // We never resend; returning undefined is safe for a read-only client.
       getMessage: async () => undefined,
@@ -630,6 +638,18 @@ export class WhatsAppConnection {
       if (this.connState === 'syncing') this.setConnState('connected');
       log.info('initial sync complete', this.syncCounters);
     }
+    // Always emit a terminal SyncProgress so the GUI's pairing wizard can
+    // advance. When isLatest arrives via onHistory, that path already emits
+    // with initial_complete:true; this duplicate is harmless. When the
+    // fallback timer fires (WhatsApp never sent isLatest), this is the only
+    // signal the GUI ever sees — without it the syncing screen hangs forever.
+    this.emitter.emit('sync', {
+      phase: 'initial',
+      chats_synced: this.syncCounters.chats,
+      messages_synced: this.syncCounters.messages,
+      initial_complete: true,
+    } satisfies SyncProgress);
+    this.emitStatus();
     const waiters = this.initialSyncWaiters;
     this.initialSyncWaiters = [];
     for (const w of waiters) w();
