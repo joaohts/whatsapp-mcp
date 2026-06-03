@@ -194,9 +194,14 @@ export class WhatsAppConnection {
       version: undefined as unknown as [number, number, number],
     }));
 
-    if (!state.creds.registered && !this.pairingMode) {
-      // No credentials and not actively pairing: we're unpaired. There is
-      // nothing to sync, so open the gate immediately — tool calls must not
+    // "Are we paired?" check — use `creds.me` (identity blob) as the signal.
+    // `creds.registered` is unreliable: Baileys sometimes leaves it false even
+    // after a fully successful pair (the stream-error-515 reconnect path can
+    // skip the flag flip). `me.id` being present is the actual signal that we
+    // have credentials and can connect.
+    const isPaired = !!state.creds.me?.id;
+    if (!isPaired && !this.pairingMode) {
+      // Truly unpaired: nothing to sync, open the gate so tool calls don't
       // block waiting for a sync that will never happen.
       this.setConnState('unpaired');
       this.resolveInitialSync(false);
