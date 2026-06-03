@@ -37,21 +37,17 @@ function registerAppProtocol(): void {
   });
 }
 
-// While the real backend (src/backend/controller.ts) is incomplete, drive the
-// UI from the mock. Set USE_MOCK_BACKEND=false once the real one lands and is
-// wired in below.
-const USE_MOCK = process.env.USE_MOCK_BACKEND !== 'false';
+// Default to the real backend; set USE_MOCK_BACKEND=true to drive the UI from
+// the mock (useful when iterating on renderer changes without a paired phone).
+const USE_MOCK = process.env.USE_MOCK_BACKEND === 'true';
 
 async function createController(): Promise<BackendController> {
   if (USE_MOCK) {
     const { MockBackendController } = await import('./__mock__/backend');
     return new MockBackendController();
   }
-  // TODO(backend): swap in the real controller when it exists.
-  //   const { createBackendController } = await import('../backend');
-  //   return createBackendController();
-  const { MockBackendController } = await import('./__mock__/backend');
-  return new MockBackendController();
+  const { createBackendController } = await import('../backend');
+  return createBackendController();
 }
 
 function appInfo(): AppInfo {
