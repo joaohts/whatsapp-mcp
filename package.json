@@ -2,11 +2,14 @@
   "name": "whatsapp-mcp",
   "version": "0.0.1",
   "private": true,
-  "description": "Read-only WhatsApp access for Claude Desktop via local MCP",
+  "description": "Read-only WhatsApp access for Claude Desktop and Claude Code via local MCP",
   "license": "MIT",
   "author": "João Henrique",
   "homepage": "https://github.com/joaohts/whatsapp-mcp",
   "main": "dist/main/index.js",
+  "bin": {
+    "whatsapp-mcp": "./bin/whatsapp-mcp"
+  },
   "scripts": {
     "build": "tsc",
     "build:renderer": "vite build",
@@ -15,18 +18,24 @@
     "dev:renderer": "vite",
     "dev:gui": "npm run build && npm run build:renderer && electron .",
     "package": "npm run build:all && electron-builder --mac --arm64",
+    "setup": "npm run build && node bin/whatsapp-mcp setup",
+    "serve": "node bin/whatsapp-mcp serve",
+    "pair": "npm run build && node bin/whatsapp-mcp pair",
+    "status": "node bin/whatsapp-mcp status",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@whiskeysockets/baileys": "^6.7.0",
     "better-sqlite3": "^12.2.0",
-    "qrcode": "^1.5.0"
+    "qrcode": "^1.5.0",
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "@types/qrcode": "^1.5.0",
+    "@types/qrcode-terminal": "^0.12.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
