@@ -138,6 +138,13 @@ export class WhatsAppConnection {
     this.pairingMode = opts;
     this.pairingCodeRequested = false;
     this.intentionalStop = false;
+    // Reset sync state so the new pair runs through resolveInitialSync's
+    // first-time path and the terminal SyncProgress fires for the wizard.
+    // Otherwise initialSyncResolved is still true from the previous session
+    // and the wizard sits on "Sincronizando…" forever.
+    this.initialSyncResolved = false;
+    this.clearInitialSyncTimer();
+    this.syncCounters = { chats: 0, messages: 0 };
     await this.connectSocket();
   }
 
@@ -263,8 +270,19 @@ export class WhatsAppConnection {
     } else if (connection === 'open') {
       this.reconnectAttempts = 0;
       this.account = this.deriveAccount();
-      this.setConnState('syncing');
-      this.armInitialSyncFallback();
+      // Only enter the 'syncing' gate on the FIRST open of this process.
+      // Subsequent reconnects (Baileys does these periodically) would
+      // otherwise bump the connState back to 'syncing' and then never
+      // recover: armInitialSyncFallback's 8s timer fires, but
+      // resolveInitialSync's early-return path doesn't settle connState
+      // because initialSyncResolved is already true. Net result: UI
+      // stuck on "Sincronizando…" indefinitely after the first reconnect.
+      if (this.initialSyncResolved) {
+        this.setConnState('connected');
+      } else {
+        this.setConnState('syncing');
+        this.armInitialSyncFallback();
+      }
       if (this.pairingMode) {
         this.pairingMode = null;
         this.pairingCodeRequested = false;
