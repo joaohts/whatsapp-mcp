@@ -10,17 +10,17 @@ export function UpdateBanner({
   return (
     <div className="banner">
       <span className="banner__text">
-        Version {update.latest} is available (you have {update.current}).
+        Versão {update.latest} disponível (você tem a {update.current}).
       </span>
       <div className="banner__actions">
         <button
           className="link"
           onClick={() => window.whatsapp.openExternal(update.url)}
         >
-          View release
+          Ver release
         </button>
         <button className="link link--muted" onClick={onDismiss}>
-          Later
+          Depois
         </button>
       </div>
     </div>

@@ -66,9 +66,9 @@ export function PairingWizard({ onDone }: { onDone: () => void }) {
   return (
     <div className="screen">
       <header className="screen__header">
-        <h1 className="screen__title">Link WhatsApp</h1>
+        <h1 className="screen__title">Conectar WhatsApp</h1>
         <p className="screen__subtitle">
-          Connect your account so Claude can read your chats. Everything stays on this Mac.
+          Conecte sua conta para o Claude conseguir ler suas conversas. Tudo fica neste Mac.
         </p>
       </header>
 
@@ -89,11 +89,11 @@ export function PairingWizard({ onDone }: { onDone: () => void }) {
       {step === 'syncing' && (
         <div className="step step--center">
           <div className="spinner spinner--lg" />
-          <p className="step__lead">Linked{account ? ` as ${account.name}` : ''} — syncing history…</p>
+          <p className="step__lead">Conectado{account ? ` como ${account.name}` : ''} — sincronizando histórico…</p>
           <p className="step__count">
             {sync
-              ? `synced ${sync.messages_synced.toLocaleString()} messages across ${sync.chats_synced.toLocaleString()} chats…`
-              : 'starting sync…'}
+              ? `${sync.messages_synced.toLocaleString()} mensagens sincronizadas em ${sync.chats_synced.toLocaleString()} conversas…`
+              : 'iniciando sincronização…'}
           </p>
         </div>
       )}
@@ -102,12 +102,12 @@ export function PairingWizard({ onDone }: { onDone: () => void }) {
         <div className="step">
           <div className="step--center">
             <div className="check">✓</div>
-            <p className="step__lead">Connected{account ? ` as ${account.name}` : ''}</p>
+            <p className="step__lead">Conectado{account ? ` como ${account.name}` : ''}</p>
             {account && <p className="step__count">{account.number}</p>}
           </div>
           <ConfigureClaude />
-          <button className="btn btn--primary" onClick={onDone}>
-            Done
+          <button className="btn btn--ghost" onClick={onDone}>
+            Concluído
           </button>
         </div>
       )}
@@ -115,10 +115,10 @@ export function PairingWizard({ onDone }: { onDone: () => void }) {
       {step === 'error' && (
         <div className="step step--center">
           <div className="cross">!</div>
-          <p className="step__lead">Pairing failed</p>
+          <p className="step__lead">Falha na conexão</p>
           <p className="step__count">{error}</p>
           <button className="btn btn--primary" onClick={() => setStep('choose')}>
-            Try again
+            Tentar novamente
           </button>
         </div>
       )}
@@ -147,20 +147,20 @@ function ChooseStep({
           className={`tab ${method === 'code' ? 'tab--active' : ''}`}
           onClick={() => setMethod('code')}
         >
-          Pairing code
+          Código
         </button>
         <button
           className={`tab ${method === 'qr' ? 'tab--active' : ''}`}
           onClick={() => setMethod('qr')}
         >
-          QR code
+          QR Code
         </button>
       </div>
 
       {method === 'code' ? (
         <div className="panel">
           <label className="field__label" htmlFor="phone">
-            Your WhatsApp phone number
+            Seu número de telefone no WhatsApp
           </label>
           <input
             id="phone"
@@ -176,19 +176,19 @@ function ChooseStep({
             disabled={!phoneValid}
             onClick={() => onStart('code')}
           >
-            Get pairing code
+            Gerar código
           </button>
           <p className="hint">
-            You'll get an 8-character code to type into WhatsApp on your phone.
+            Você vai receber um código de 8 caracteres para digitar no WhatsApp do seu celular.
           </p>
         </div>
       ) : (
         <div className="panel">
           <p className="hint">
-            Generate a QR code, then scan it with your phone's camera in WhatsApp.
+            Gere um QR code e escaneie com a câmera do seu celular no WhatsApp.
           </p>
           <button className="btn btn--primary" onClick={() => onStart('qr')}>
-            Generate QR code
+            Gerar QR code
           </button>
         </div>
       )}
@@ -212,39 +212,39 @@ function WaitingStep({
       {method === 'code' ? (
         code ? (
           <>
-            <p className="step__lead">Enter this code in WhatsApp</p>
+            <p className="step__lead">Digite este código no WhatsApp</p>
             <div className="code">{code}</div>
           </>
         ) : (
           <>
             <div className="spinner spinner--lg" />
-            <p className="step__count">Requesting code…</p>
+            <p className="step__count">Solicitando código…</p>
           </>
         )
       ) : qrPayload ? (
         <>
-          <p className="step__lead">Scan this code in WhatsApp</p>
+          <p className="step__lead">Escaneie este código no WhatsApp</p>
           <QrCode payload={qrPayload} />
         </>
       ) : (
         <>
           <div className="spinner spinner--lg" />
-          <p className="step__count">Generating QR…</p>
+          <p className="step__count">Gerando QR…</p>
         </>
       )}
 
       <ol className="instructions">
-        <li>Open WhatsApp on your phone</li>
-        <li>Tap Settings → Linked Devices → Link a Device</li>
+        <li>Abra o WhatsApp no seu celular</li>
+        <li>Toque em Configurações → Aparelhos conectados → Conectar um aparelho</li>
         {method === 'code' ? (
-          <li>Tap "Link with phone number instead" and enter the code</li>
+          <li>Toque em "Conectar com número de telefone" e digite o código</li>
         ) : (
-          <li>Point your phone at this screen to scan</li>
+          <li>Aponte seu celular para esta tela e escaneie</li>
         )}
       </ol>
 
       <button className="btn btn--ghost" onClick={onCancel}>
-        Cancel
+        Cancelar
       </button>
     </div>
   );

@@ -3,9 +3,9 @@ import type { UserConfig } from '../../shared/bridge';
 import { TOOLS, type ToolCategory, type ToolName } from '../../types/tools';
 
 const CATEGORY_LABEL: Record<ToolCategory, string> = {
-  chats: 'Chats & messages',
-  media: 'Media',
-  contacts: 'Contacts & groups',
+  chats: 'Conversas e mensagens',
+  media: 'Mídia',
+  contacts: 'Contatos e grupos',
 };
 
 const CATEGORY_ORDER: ToolCategory[] = ['chats', 'media', 'contacts'];
@@ -41,8 +41,8 @@ export function SettingsPanel() {
   return (
     <div className="step">
       <p className="hint">
-        Choose which tools Claude can use. Disabled tools never appear in Claude's tool
-        list. Changes apply the next time Claude Desktop restarts.
+        Escolha quais ferramentas o Claude pode usar. As que estão desativadas nem
+        aparecem na lista do Claude. As mudanças se aplicam ao reabrir o Claude Desktop.
       </p>
 
       {CATEGORY_ORDER.map((category) => {

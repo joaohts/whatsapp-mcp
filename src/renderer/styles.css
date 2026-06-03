@@ -412,6 +412,11 @@ body {
   flex-direction: column;
   gap: 10px;
 }
+.actions__danger {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--surface-2);
+}
 
 .footer {
   margin-top: 6px;

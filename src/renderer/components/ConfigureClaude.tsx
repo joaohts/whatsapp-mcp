@@ -6,8 +6,8 @@ type State =
   | { kind: 'done'; patched: boolean }
   | { kind: 'error'; message: string };
 
-/** "Configure Claude Desktop" button — idempotently patches the MCP config. */
-export function ConfigureClaude() {
+/** Botão "Configurar Claude Desktop" — atualiza a config do MCP de forma idempotente. */
+export function ConfigureClaude({ variant = 'primary' }: { variant?: 'primary' | 'secondary' } = {}) {
   const [state, setState] = useState<State>({ kind: 'idle' });
 
   async function configure() {
@@ -23,15 +23,15 @@ export function ConfigureClaude() {
   return (
     <div className="configure">
       <button
-        className="btn btn--secondary"
+        className={`btn btn--${variant}`}
         onClick={configure}
         disabled={state.kind === 'working'}
       >
-        {state.kind === 'working' ? 'Configuring…' : 'Configure Claude Desktop'}
+        {state.kind === 'working' ? 'Configurando…' : 'Configurar Claude Desktop'}
       </button>
       {state.kind === 'done' && (
         <p className="hint hint--ok">
-          ✓ Done. Restart Claude Desktop, then ask “what are my unread WhatsApp chats?”
+          ✓ Pronto. Reinicie o Claude Desktop e pergunte "quais são minhas conversas não lidas do WhatsApp?"
         </p>
       )}
       {state.kind === 'error' && <p className="hint hint--err">{state.message}</p>}

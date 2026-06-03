@@ -7,12 +7,12 @@ import { ConfigureClaude } from './ConfigureClaude';
 type Tab = 'status' | 'settings';
 
 const CONNECTION_LABEL: Record<ConnectionState, string> = {
-  unpaired: 'Not linked',
-  connecting: 'Connecting…',
-  syncing: 'Syncing…',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  error: 'Error',
+  unpaired: 'Não conectado',
+  connecting: 'Conectando…',
+  syncing: 'Sincronizando…',
+  connected: 'Conectado',
+  disconnected: 'Desconectado',
+  error: 'Erro',
 };
 
 export function Dashboard({
@@ -39,7 +39,7 @@ export function Dashboard({
           className={`nav__item ${tab === 'settings' ? 'nav__item--active' : ''}`}
           onClick={() => setTab('settings')}
         >
-          Settings
+          Configurações
         </button>
       </nav>
 
@@ -86,44 +86,44 @@ function StatusTab({
       {syncing && (
         <p className="step__count">
           {sync
-            ? `synced ${sync.messages_synced.toLocaleString()} messages across ${sync.chats_synced.toLocaleString()} chats…`
-            : 'syncing…'}
+            ? `${sync.messages_synced.toLocaleString()} mensagens sincronizadas em ${sync.chats_synced.toLocaleString()} conversas…`
+            : 'sincronizando…'}
         </p>
       )}
 
       {status.last_error && (
         <div className="error-box">
-          <div className="error-box__title">Last error</div>
+          <div className="error-box__title">Último erro</div>
           <div className="error-box__body">{status.last_error}</div>
         </div>
       )}
 
       <dl className="stats">
         <div className="stats__row">
-          <dt>Last sync</dt>
+          <dt>Última sincronização</dt>
           <dd>{formatTime(status.last_sync_at)}</dd>
         </div>
         <div className="stats__row">
-          <dt>Chats in store</dt>
+          <dt>Conversas armazenadas</dt>
           <dd>{status.store_chat_count.toLocaleString()}</dd>
         </div>
         <div className="stats__row">
-          <dt>Messages in store</dt>
+          <dt>Mensagens armazenadas</dt>
           <dd>{status.store_message_count.toLocaleString()}</dd>
         </div>
       </dl>
 
       <div className="actions">
+        <ConfigureClaude />
         <button
           className="btn btn--secondary"
           onClick={() => window.whatsapp.syncNow()}
           disabled={syncing || !status.paired_account}
         >
-          Sync now
+          Sincronizar agora
         </button>
-        <ConfigureClaude />
-        <button className="btn btn--ghost btn--danger" onClick={unlink}>
-          Unlink device
+        <button className="btn btn--ghost btn--danger actions__danger" onClick={unlink}>
+          Desconectar dispositivo
         </button>
       </div>
 
@@ -136,6 +136,6 @@ function StatusTab({
 }
 
 function formatTime(seconds: number | null): string {
-  if (!seconds) return 'never';
-  return new Date(seconds * 1000).toLocaleString();
+  if (!seconds) return 'nunca';
+  return new Date(seconds * 1000).toLocaleString('pt-BR');
 }
