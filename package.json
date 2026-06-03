@@ -14,7 +14,8 @@
     "dev:mcp": "tsx src/main/index.ts --mcp",
     "dev:renderer": "vite",
     "dev:gui": "npm run build && npm run build:renderer && electron .",
-    "package": "npm run build:all && electron-builder --mac --arm64"
+    "package": "npm run build:all && electron-builder --mac --arm64",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
