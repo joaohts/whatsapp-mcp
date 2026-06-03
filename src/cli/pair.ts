@@ -19,7 +19,7 @@ import {
   storeDbPath,
   configPath,
 } from '../backend/paths';
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import * as qrcodePng from 'qrcode';
@@ -46,6 +46,40 @@ export interface PairResult {
 
 export function qrPngPath(): string {
   return join(appSupportDir, 'pairing-qr.png');
+}
+
+/** Raw QR payload. The `watch-qr` subcommand reads this. */
+export function qrTxtPath(): string {
+  return join(appSupportDir, 'pairing-qr.txt');
+}
+
+/** Sentinel file created when pairing succeeds. `watch-qr` watches it to exit. */
+export function pairingCompletePath(): string {
+  return join(appSupportDir, 'pairing-complete');
+}
+
+function clearStaleSentinels(): void {
+  try {
+    if (existsSync(pairingCompletePath())) unlinkSync(pairingCompletePath());
+  } catch {
+    /* non-fatal */
+  }
+}
+
+function writeQrTxt(payload: string): void {
+  try {
+    writeFileSync(qrTxtPath(), payload);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+function markPairingComplete(): void {
+  try {
+    writeFileSync(pairingCompletePath(), '');
+  } catch {
+    /* non-fatal */
+  }
 }
 
 function ensureConfigFile(): void {
@@ -89,6 +123,7 @@ function renderCode(code: string): void {
 export async function pair(opts: PairOptions): Promise<PairResult> {
   ensureAppDirs();
   ensureConfigFile();
+  clearStaleSentinels();
   const store = new Store(storeDbPath);
   const connection = new WhatsAppConnection(store);
 
@@ -98,6 +133,9 @@ export async function pair(opts: PairOptions): Promise<PairResult> {
     const unsubscribe = connection.on('pairing', (e: PairingEvent) => {
       switch (e.kind) {
         case 'qr':
+          // Write raw payload for any external watcher (e.g. `whatsapp-mcp
+          // watch-qr` in a separate terminal).
+          writeQrTxt(e.payload);
           // Write the PNG. On the first QR, auto-launch Preview so the user
           // doesn't need any image-rendering chat UI. On rotations
           // (~every 60s), overwrite the file — Preview will keep showing
@@ -133,6 +171,7 @@ export async function pair(opts: PairOptions): Promise<PairResult> {
           renderCode(e.code);
           break;
         case 'success':
+          markPairingComplete();
           process.stderr.write(
             `\n  Linked as ${e.account.name} (${e.account.number}).\n`,
           );

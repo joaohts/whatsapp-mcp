@@ -16,11 +16,14 @@ const USAGE = `whatsapp-mcp — read-only WhatsApp for Claude Code
 Usage:
   whatsapp-mcp setup [--method qr|code] [--phone +5511...] [--yes]
   whatsapp-mcp pair  [--method qr|code] [--phone +5511...]
+  whatsapp-mcp watch-qr
   whatsapp-mcp serve
   whatsapp-mcp status
   whatsapp-mcp version
 
 State lives under \$WHATSAPP_MCP_HOME (default: ~/.whatsapp-mcp/).
+\`watch-qr\` runs in a separate terminal alongside \`setup\` / \`pair\` and
+renders a live-updating ASCII QR while pairing is pending.
 `;
 
 interface ParsedArgs {
@@ -75,6 +78,11 @@ async function main(): Promise<void> {
     case 'serve': {
       const { serve } = await import('./serve');
       await serve();
+      break;
+    }
+    case 'watch-qr': {
+      const { watchQr } = await import('./watch-qr');
+      await watchQr();
       break;
     }
     case 'status': {
