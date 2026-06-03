@@ -23,6 +23,10 @@ export interface BackendController {
   syncNow(): Promise<void>;
   onSyncProgress(handler: (progress: SyncProgress) => void): Unsubscribe;
 
+  /** GUI-only: reclaim the Baileys socket from the --mcp subprocess if it's
+   *  not alive. Refuses (returns reclaimed:false) when Claude is open. */
+  reclaimConnection(): Promise<{ reclaimed: boolean; reason?: 'claude_active' }>;
+
   // Config (per-tool toggles)
   getConfig(): Promise<UserConfig>;
   setConfig(patch: Partial<UserConfig>): Promise<UserConfig>;
@@ -39,6 +43,9 @@ export type ConnectionState =
   | 'syncing'
   | 'connected'
   | 'disconnected'
+  /** Another session (the GUI or the MCP subprocess sibling) owns the
+   *  Baileys socket. Not an error — Model C says yield without fighting. */
+  | 'in_use_elsewhere'
   | 'error';
 
 export interface BackendStatus {

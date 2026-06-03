@@ -51,6 +51,10 @@ export interface WhatsAppBridge {
   syncNow(): Promise<void>;
   onSyncProgress(cb: (progress: SyncProgress) => void): Unsubscribe;
 
+  /** Reclaim the WA socket from the MCP subprocess if it's not alive.
+   *  Refuses with reason:'claude_active' if Claude is open. */
+  reclaimConnection(): Promise<{ reclaimed: boolean; reason?: 'claude_active' }>;
+
   // Config (per-tool toggles)
   getConfig(): Promise<UserConfig>;
   setConfig(patch: Partial<UserConfig>): Promise<UserConfig>;
@@ -70,6 +74,7 @@ export const IPC = {
   cancelPairing: 'backend:cancelPairing',
   unlinkDevice: 'backend:unlinkDevice',
   syncNow: 'backend:syncNow',
+  reclaimConnection: 'backend:reclaimConnection',
   getConfig: 'backend:getConfig',
   setConfig: 'backend:setConfig',
   configureClaudeDesktop: 'backend:configureClaudeDesktop',

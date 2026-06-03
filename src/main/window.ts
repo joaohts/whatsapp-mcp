@@ -107,6 +107,7 @@ export async function runGuiApp(): Promise<void> {
   ipcMain.handle(IPC.cancelPairing, () => controller.cancelPairing());
   ipcMain.handle(IPC.unlinkDevice, () => controller.unlinkDevice());
   ipcMain.handle(IPC.syncNow, () => controller.syncNow());
+  ipcMain.handle(IPC.reclaimConnection, () => controller.reclaimConnection());
   ipcMain.handle(IPC.getConfig, () => controller.getConfig());
   ipcMain.handle(IPC.setConfig, (_e, patch) => controller.setConfig(patch));
   ipcMain.handle(IPC.configureClaudeDesktop, () => controller.configureClaudeDesktop());

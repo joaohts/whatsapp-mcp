@@ -365,6 +365,19 @@ body {
 .status-badge--disconnected .dot {
   background: var(--danger);
 }
+.status-badge--in_use_elsewhere .dot {
+  background: var(--text-dim);
+}
+
+.info-box {
+  background: rgba(80, 120, 200, 0.08);
+  border: 1px solid rgba(80, 120, 200, 0.22);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
 
 .account {
   display: flex;

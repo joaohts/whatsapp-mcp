@@ -12,7 +12,8 @@ import {
 import { TOOLS, SERVER_INSTRUCTIONS_UNTRUSTED, type ToolName } from '../types/tools';
 import { Store } from '../store';
 import { WhatsAppConnection } from '../baileys';
-import { ensureAppDirs, storeDbPath, mcpLogPath } from '../backend/paths';
+import { ensureAppDirs, storeDbPath, mcpLogPath, mcpPidPath } from '../backend/paths';
+import { writeFileSync, unlinkSync } from 'fs';
 import { configureLogger, log } from '../backend/logger';
 import { loadConfig } from '../backend/config';
 import { HANDLERS } from './tools';
@@ -25,6 +26,26 @@ export async function runMcpServer(): Promise<void> {
   ensureAppDirs();
   configureLogger({ file: mcpLogPath, level: 'info' });
   log.info('--- MCP server starting ---');
+
+  // PID file so the GUI can detect that an MCP subprocess is alive and avoid
+  // reclaiming the Baileys socket while Claude is using it. Cleared on
+  // every exit path we can hook; the GUI also tests kill(pid, 0) to handle
+  // crashes that left a stale file.
+  writeFileSync(mcpPidPath, String(process.pid));
+  const cleanupPid = (): void => {
+    try {
+      unlinkSync(mcpPidPath);
+    } catch {
+      // Already gone — fine.
+    }
+  };
+  process.on('exit', cleanupPid);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+    process.on(sig, () => {
+      cleanupPid();
+      process.exit(0);
+    });
+  }
 
   const config = loadConfig();
   const enabled = new Set<ToolName>(

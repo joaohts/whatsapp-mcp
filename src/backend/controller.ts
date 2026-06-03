@@ -5,11 +5,28 @@
 
 import { Store } from '../store';
 import { WhatsAppConnection } from '../baileys';
-import { ensureAppDirs, storeDbPath, logsDir } from './paths';
+import { ensureAppDirs, storeDbPath, logsDir, mcpPidPath } from './paths';
 import { configureLogger, log } from './logger';
 import { loadConfig, patchConfig } from './config';
 import { configureClaudeDesktop } from './claude-config';
 import { join } from 'path';
+import { readFileSync } from 'fs';
+
+/** True if the --mcp subprocess (Claude's) is currently alive. Reads the
+ *  PID file the subprocess maintains and tests it with a no-op kill. */
+function isMcpSubprocessAlive(): boolean {
+  try {
+    const raw = readFileSync(mcpPidPath, 'utf8').trim();
+    const pid = Number(raw);
+    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) {
+      return false;
+    }
+    process.kill(pid, 0); // signal 0 = existence check, throws if gone
+    return true;
+  } catch {
+    return false;
+  }
+}
 import type {
   BackendController,
   BackendStatus,
@@ -91,6 +108,25 @@ export class BackendControllerImpl implements BackendController {
     // while the socket was dormant. History lands via onSyncProgress.
     await this.connection!.stop();
     await this.connection!.start();
+  }
+
+  /**
+   * Reclaim the Baileys socket for this process (the GUI). Refuses if the
+   * --mcp subprocess is alive — that means Claude is open and we'd kick
+   * its tool calls. Otherwise drops + restarts our connection so the GUI
+   * regains ownership cleanly.
+   */
+  async reclaimConnection(): Promise<{
+    reclaimed: boolean;
+    reason?: 'claude_active';
+  }> {
+    if (isMcpSubprocessAlive()) {
+      return { reclaimed: false, reason: 'claude_active' };
+    }
+    await this.requireStarted();
+    await this.connection!.stop();
+    await this.connection!.start();
+    return { reclaimed: true };
   }
 
   onSyncProgress(handler: (progress: SyncProgress) => void): Unsubscribe {

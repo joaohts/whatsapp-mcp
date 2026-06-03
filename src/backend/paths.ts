@@ -39,6 +39,11 @@ export const configPath = join(appSupportDir, 'config.json');
 /** --mcp mode log file. */
 export const mcpLogPath = join(logsDir, 'mcp.log');
 
+/** PID file written by the --mcp subprocess. The GUI reads + tests with
+ *  process.kill(pid, 0) before reclaiming the Baileys socket, so it doesn't
+ *  accidentally kick Claude's live MCP session. */
+export const mcpPidPath = join(appSupportDir, 'mcp.pid');
+
 /** Claude Desktop config that we idempotently patch. */
 export const claudeDesktopConfigPath = join(
   home,

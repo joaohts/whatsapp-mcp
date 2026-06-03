@@ -12,6 +12,7 @@ const CONNECTION_LABEL: Record<ConnectionState, string> = {
   syncing: 'Sincronizando…',
   connected: 'Conectado',
   disconnected: 'Desconectado',
+  in_use_elsewhere: 'Em uso pelo Claude',
   error: 'Erro',
 };
 
@@ -63,10 +64,33 @@ function StatusTab({
 }) {
   const sync = useSyncProgress();
   const syncing = status.connection === 'syncing';
+  const inUseElsewhere = status.connection === 'in_use_elsewhere';
+  const canShowReconnect =
+    status.paired_account &&
+    (status.connection === 'in_use_elsewhere' ||
+      status.connection === 'disconnected' ||
+      status.connection === 'error');
+  const [reconnectMsg, setReconnectMsg] = useState<string | null>(null);
+  const [reconnectBusy, setReconnectBusy] = useState(false);
 
   async function unlink() {
     await window.whatsapp.unlinkDevice();
     onRepair();
+  }
+
+  async function reconnect() {
+    setReconnectBusy(true);
+    setReconnectMsg(null);
+    try {
+      const res = await window.whatsapp.reclaimConnection();
+      if (!res.reclaimed) {
+        setReconnectMsg(
+          'O Claude Desktop está aberto e usando a conexão. Feche o Claude e tente novamente.',
+        );
+      }
+    } finally {
+      setReconnectBusy(false);
+    }
   }
 
   return (
@@ -89,6 +113,15 @@ function StatusTab({
             ? `${sync.messages_synced.toLocaleString()} mensagens sincronizadas em ${sync.chats_synced.toLocaleString()} conversas…`
             : 'sincronizando…'}
         </p>
+      )}
+
+      {inUseElsewhere && (
+        <div className="info-box">
+          O Claude Desktop está usando a conexão do WhatsApp. As mensagens
+          continuam sincronizando em segundo plano — o painel só mostra os
+          números atualizados aqui. Para reassumir a conexão, feche o
+          Claude e clique em <strong>Reconectar</strong>.
+        </div>
       )}
 
       {status.last_error && (
@@ -115,16 +148,24 @@ function StatusTab({
 
       <div className="actions">
         <ConfigureClaude />
-        <button
-          className="btn btn--secondary"
-          onClick={() => window.whatsapp.syncNow()}
-          disabled={syncing || !status.paired_account}
-        >
-          Sincronizar agora
-        </button>
-        <button className="btn btn--ghost btn--danger actions__danger" onClick={unlink}>
-          Desconectar dispositivo
-        </button>
+
+        {canShowReconnect && (
+          <button
+            className="btn btn--secondary"
+            onClick={reconnect}
+            disabled={reconnectBusy}
+          >
+            {reconnectBusy ? 'Reconectando…' : 'Reconectar'}
+          </button>
+        )}
+
+        {reconnectMsg && <p className="hint hint--err">{reconnectMsg}</p>}
+
+        {!inUseElsewhere && (
+          <button className="btn btn--ghost btn--danger actions__danger" onClick={unlink}>
+            Desconectar dispositivo
+          </button>
+        )}
       </div>
 
       <footer className="footer">

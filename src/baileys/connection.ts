@@ -348,9 +348,10 @@ export class WhatsAppConnection {
     if (statusCode === DisconnectReason.connectionReplaced) {
       // Another process (likely the GUI/MCP sibling) claimed the device.
       // Yield: do not fight for the socket. See PLANNING "Socket ownership".
-      log.warn('connection replaced by another session; yielding');
-      this.lastError = 'Connection taken over by another window/process';
-      this.setConnState('disconnected');
+      // Not surfaced as an error — this is normal Model C behavior.
+      log.info('connection replaced by another session; yielding');
+      this.lastError = null;
+      this.setConnState('in_use_elsewhere');
       return;
     }
 

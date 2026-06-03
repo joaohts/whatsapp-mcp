@@ -31,6 +31,7 @@ const bridge: WhatsAppBridge = {
 
   // Sync
   syncNow: () => ipcRenderer.invoke(IPC.syncNow),
+  reclaimConnection: () => ipcRenderer.invoke(IPC.reclaimConnection),
   onSyncProgress: (cb) => subscribe(IPC.evtSync, cb),
 
   // Config

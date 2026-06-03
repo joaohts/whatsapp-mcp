@@ -136,6 +136,15 @@ export class MockBackendController implements BackendController {
     this.runIncrementalSync();
   }
 
+  async reclaimConnection(): Promise<{
+    reclaimed: boolean;
+    reason?: 'claude_active';
+  }> {
+    this.setConnection('syncing');
+    this.runIncrementalSync();
+    return { reclaimed: true };
+  }
+
   onSyncProgress(handler: Handler<SyncProgress>): Unsubscribe {
     return this.syncEvents.on(handler);
   }
