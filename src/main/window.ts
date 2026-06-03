@@ -62,9 +62,9 @@ export async function runGuiApp(): Promise<void> {
 
   const win = new BrowserWindow({
     width: 460,
-    height: 720,
+    height: 620,
     minWidth: 420,
-    minHeight: 600,
+    minHeight: 520,
     resizable: true,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0b141a',

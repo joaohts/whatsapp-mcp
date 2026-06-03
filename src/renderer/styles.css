@@ -37,6 +37,25 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+/*
+ * Window-drag handle. The window uses titleBarStyle:hiddenInset, so the
+ * traffic lights overlay the top-left corner of the content. We give them
+ * a thin drag strip here instead of marking the whole .screen draggable —
+ * draggable regions intercept scroll/click events and would make the
+ * dashboard feel "stuck" when wheel-scrolling.
+ */
+.app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  -webkit-app-region: drag;
+  z-index: 100;
 }
 
 .app--loading {
@@ -44,18 +63,10 @@ body {
   justify-content: center;
 }
 
-/* Draggable title strip (window uses hiddenInset traffic lights). */
 .screen {
   flex: 1;
   overflow-y: auto;
   padding: 38px 22px 26px;
-  -webkit-app-region: drag;
-}
-.screen button,
-.screen input,
-.screen label,
-.screen a {
-  -webkit-app-region: no-drag;
 }
 
 .screen__header {
