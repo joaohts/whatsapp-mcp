@@ -4,6 +4,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { app } from 'electron';
 import { claudeDesktopConfigPath } from './paths';
 import { log } from './logger';
 
@@ -16,7 +17,16 @@ interface ClaudeConfig {
 
 /** The command Claude Desktop should spawn — the currently running binary. */
 function mcpCommand(): { command: string; args: string[] } {
-  return { command: process.execPath, args: ['--mcp'] };
+  // In a packaged build process.execPath is the WhatsAppMCP.app binary, which
+  // knows where its bundled app lives — passing the app path would actually
+  // confuse Electron. In dev mode process.execPath is the generic Electron
+  // binary in node_modules, so we have to tell it which project to load,
+  // otherwise it opens the default "no app" splash window and writes
+  // "Electron <version>…" to stdout, which Claude tries to parse as JSON-RPC.
+  const args = app.isPackaged
+    ? ['--mcp']
+    : [app.getAppPath(), '--mcp'];
+  return { command: process.execPath, args };
 }
 
 export function configureClaudeDesktop(): {
