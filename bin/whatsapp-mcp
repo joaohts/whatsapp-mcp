@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+// Stable entry point. Claude Code's config points here. Resolves the compiled
+// dispatcher in dist/cli/main.js.
+const path = require('path');
+require(path.resolve(__dirname, '..', 'dist', 'cli', 'main.js'));

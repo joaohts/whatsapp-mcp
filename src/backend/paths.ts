@@ -1,6 +1,11 @@
 // Centralised filesystem locations. All app state lives OUTSIDE the .app
 // bundle so it survives reinstalls and drag-replace updates (see PLANNING.md
 // "Install & runtime").
+//
+// The CLI variant overrides the base directory by exporting WHATSAPP_MCP_HOME
+// before any import of this file. When set, the CLI's state lives there
+// (typically ~/.whatsapp-mcp/) instead of ~/Library/Application Support/.
+// The DMG variant never sets this env var, so it gets the original paths.
 
 import { homedir } from 'os';
 import { join } from 'path';
@@ -10,16 +15,17 @@ const APP_NAME = 'WhatsAppMCP';
 
 const home = homedir();
 
-/** ~/Library/Application Support/WhatsAppMCP */
-export const appSupportDir = join(
-  home,
-  'Library',
-  'Application Support',
-  APP_NAME,
-);
+const customHome = process.env.WHATSAPP_MCP_HOME;
 
-/** ~/Library/Logs/WhatsAppMCP */
-export const logsDir = join(home, 'Library', 'Logs', APP_NAME);
+/** ~/Library/Application Support/WhatsAppMCP — or $WHATSAPP_MCP_HOME if set */
+export const appSupportDir = customHome
+  ? customHome
+  : join(home, 'Library', 'Application Support', APP_NAME);
+
+/** ~/Library/Logs/WhatsAppMCP — or $WHATSAPP_MCP_HOME/logs if set */
+export const logsDir = customHome
+  ? join(customHome, 'logs')
+  : join(home, 'Library', 'Logs', APP_NAME);
 
 /** Baileys multi-file auth state. */
 export const authDir = join(appSupportDir, 'auth');
@@ -41,6 +47,9 @@ export const claudeDesktopConfigPath = join(
   'Claude',
   'claude_desktop_config.json',
 );
+
+/** Claude Code user-scope config. */
+export const claudeCodeConfigPath = join(home, '.claude.json');
 
 /** Ensure the directories we own exist. Safe to call repeatedly. */
 export function ensureAppDirs(): void {

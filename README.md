@@ -1,8 +1,16 @@
 # whatsapp-mcp
 
-> Status: **planning / pre-alpha**. No working code yet — see [PLANNING.md](./PLANNING.md).
+> Status: **pre-alpha**. Two variants shipping in parallel — see [PLANNING.md](./PLANNING.md) (DMG) and [PLANNING-CLI.md](./PLANNING-CLI.md) (CLI).
 
-A macOS app that exposes a **read-only view of your WhatsApp** to local Claude via the [Model Context Protocol](https://modelcontextprotocol.io/). Works with both **Claude Desktop** and **Claude Code** — same binary, same MCP protocol, the app auto-detects which client(s) you have installed. Designed for one-click install: download the DMG, drag to Applications, pair with WhatsApp, click "Configure Claude" — done.
+A macOS app that exposes a **read-only view of your WhatsApp** to local Claude via the [Model Context Protocol](https://modelcontextprotocol.io/). Works with both **Claude Desktop** and **Claude Code**.
+
+Two install paths:
+
+- **DMG (lay-friendly)** — download the DMG, drag to Applications, pair with WhatsApp, click "Configure Claude" → done. Targets Claude Desktop.
+- **CLI (Claude Code, Terminal-friendly)** — one-line install, pairs in the terminal, registers with Claude Code automatically:
+  ```bash
+  bash <(curl -fsSL https://raw.githubusercontent.com/joaohts/whatsapp-mcp/cli/install.sh)
+  ```
 
 **Everything stays on your Mac.** WhatsApp messages, auth state, and configuration never leave the device. The only network endpoint is WhatsApp itself (unavoidable — that's the WA protocol).
 
