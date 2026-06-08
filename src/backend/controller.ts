@@ -45,6 +45,18 @@ export class BackendControllerImpl implements BackendController {
     ensureAppDirs();
     configureLogger({ file: join(logsDir, 'gui.log'), level: 'info' });
     this.store = new Store(storeDbPath);
+
+    // One-shot repair: rows persisted before the mapper learned to look at
+    // msg.participant landed with null sender for every @lid group message.
+    // Re-extracts sender from raw_proto and writes it back. Idempotent —
+    // subsequent launches no-op once the store is clean.
+    try {
+      const { backfillGroupSenders } = await import('../baileys/backfill');
+      backfillGroupSenders(this.store);
+    } catch (err) {
+      log.warn('backfillGroupSenders failed', err);
+    }
+
     this.connection = new WhatsAppConnection(this.store);
     await this.connection.start();
     log.info('backend controller started');

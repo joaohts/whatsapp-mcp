@@ -1,6 +1,6 @@
 {
   "name": "whatsapp-mcp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Read-only WhatsApp access for Claude Desktop and Claude Code via local MCP",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "serve": "node bin/whatsapp-mcp serve",
     "pair": "npm run build && node bin/whatsapp-mcp pair",
     "status": "node bin/whatsapp-mcp status",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
