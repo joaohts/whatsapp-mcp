@@ -131,11 +131,17 @@ export function mapMessage(
   const timestamp = toNum(msg.messageTimestamp);
   const body = extractBody(content, contentType) ?? (isStub ? stubBody(msg) : null);
 
-  const author = isGroup && !fromMe ? normalizeOrNull(key.participant) : null;
+  // Sender JID for group messages can live on either `key.participant` (the
+  // older phone-number-style location) or `msg.participant` (the top-level
+  // field where WhatsApp now puts the `@lid` privacy ID for newer groups).
+  // Trying both is the empirically observed fix; without the fallback, every
+  // @lid group message loses its sender and the store records null/null.
+  const participantJid = key.participant ?? msg.participant ?? null;
+  const author = isGroup && !fromMe ? normalizeOrNull(participantJid) : null;
   const sender = fromMe
     ? ownJid
     : isGroup
-      ? normalizeOrNull(key.participant)
+      ? normalizeOrNull(participantJid)
       : chatId;
 
   const replyTo = extractReplyTo(content, contentType);

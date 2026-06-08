@@ -127,6 +127,15 @@ export async function runDaemon(): Promise<void> {
   const store = new Store(storeDbPath);
   const connection = new WhatsAppConnection(store);
 
+  // One-shot repair for rows whose @lid sender was dropped by the pre-fix
+  // mapper. Idempotent — re-running is a no-op once the store is clean.
+  try {
+    const { backfillGroupSenders } = await import('../baileys/backfill');
+    backfillGroupSenders(store);
+  } catch (err) {
+    log.warn('backfillGroupSenders failed', err);
+  }
+
   writePidFile();
   removeFileIfPresent(daemonSocketPath());
 

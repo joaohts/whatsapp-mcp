@@ -151,6 +151,18 @@ export class Store {
       setEdited: this.db.prepare(
         `UPDATE messages SET body = @body, edited_at = @edited_at WHERE chat_id = @chat_id AND id = @id`,
       ),
+      setSender: this.db.prepare(
+        `UPDATE messages SET sender_id = @sender_id, author = @author
+         WHERE chat_id = @chat_id AND id = @id`,
+      ),
+      listNullSenderGroupRows: this.db.prepare(
+        `SELECT chat_id, id, raw_proto FROM messages
+         WHERE from_me = 0
+           AND sender_id IS NULL
+           AND raw_proto IS NOT NULL
+           AND chat_id LIKE '%@g.us'
+         LIMIT @limit`,
+      ),
       applyLastMessage: this.db.prepare(`
         INSERT INTO chats (id, is_group, last_message_timestamp,
           last_message_preview, last_message_from_me)
@@ -246,6 +258,33 @@ export class Store {
       id: messageId,
       read_by_recipient: read ? 1 : 0,
     });
+  }
+
+  setMessageSender(
+    chatId: ChatId,
+    messageId: MessageId,
+    senderId: string | null,
+    author: string | null,
+  ): void {
+    this.stmts.setSender.run({
+      chat_id: chatId,
+      id: messageId,
+      sender_id: senderId,
+      author,
+    });
+  }
+
+  /** Rows that look like incoming group messages whose sender was dropped
+   *  (e.g. by the pre-fix mapper that only read key.participant). `limit`
+   *  caps the chunk so the backfill can stream through a large store. */
+  listNullSenderGroupRows(
+    limit: number,
+  ): Array<{ chat_id: ChatId; id: MessageId; raw_proto: Buffer }> {
+    return this.stmts.listNullSenderGroupRows.all({ limit }) as Array<{
+      chat_id: ChatId;
+      id: MessageId;
+      raw_proto: Buffer;
+    }>;
   }
 
   setEdited(
