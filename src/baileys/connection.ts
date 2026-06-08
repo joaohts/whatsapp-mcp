@@ -31,6 +31,14 @@ import type {
 import type { Boom } from '@hapi/boom';
 import { hostname } from 'node:os';
 import { Store } from '../store';
+
+/** The string WhatsApp shows in Settings → Linked Devices. */
+function deviceLabel(): string {
+  const explicit = process.env.WHATSAPP_MCP_DEVICE_NAME?.trim();
+  if (explicit) return explicit;
+  const host = hostname().replace(/\.local$/i, '');
+  return `WhatsAppMCP @ ${host}`;
+}
 import { log, makeBaileysLogger } from '../backend/logger';
 import { authDir } from '../backend/paths';
 import {
@@ -235,15 +243,18 @@ export class WhatsAppConnection {
       auth: state,
       version,
       logger: makeBaileysLogger('warn') as never,
-      // Distinct linked-device identity per host. WhatsApp shows this in
-      // Settings → Linked Devices; identical names across installs make the
-      // list ambiguous and WA can also drop older sessions sharing the name
-      // (observed: Mac and Pi both labeled "WhatsAppMCP" → Mac got "replaced"
-      // on the Pi's first pair). Hostname makes every install unique.
+      // Distinct linked-device identity per install. WhatsApp shows this in
+      // Settings → Linked Devices; identical names across installs are
+      // ambiguous and WA has dropped older sessions sharing a name (observed
+      // when both Mac and Pi labeled themselves "WhatsAppMCP"). Resolution
+      // order:
+      //   1. $WHATSAPP_MCP_DEVICE_NAME — explicit override (good for Pi's
+      //      systemd unit: Environment=WHATSAPP_MCP_DEVICE_NAME=Pi).
+      //   2. Hostname with ".local" stripped (cleaner than raw mDNS name).
       browser:
         process.platform === 'darwin'
-          ? Browsers.macOS(`WhatsAppMCP @ ${hostname()}`)
-          : Browsers.ubuntu(`WhatsAppMCP @ ${hostname()}`),
+          ? Browsers.macOS(deviceLabel())
+          : Browsers.ubuntu(deviceLabel()),
       markOnlineOnConnect: false, // never announce presence (read-only)
       // We want a shallow sync: tell WA we're not a full-history client
       // (so it doesn't push years of messages), but ALSO override Baileys'

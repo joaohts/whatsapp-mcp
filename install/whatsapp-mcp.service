@@ -7,6 +7,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=%h/.whatsapp-mcp/repo/bin/whatsapp-mcp daemon
+# Name shown in WhatsApp → Settings → Linked Devices. Defaults to
+# "WhatsAppMCP @ <hostname>"; uncomment to set explicitly.
+# Environment=WHATSAPP_MCP_DEVICE_NAME=Raspberry Pi
 Restart=on-failure
 RestartSec=10
 # Cap restart spinning on a persistent failure (e.g. unpaired account).
