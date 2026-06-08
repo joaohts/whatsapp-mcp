@@ -4,9 +4,34 @@
 import type { Store } from '../store';
 import type { WhatsAppConnection } from '../baileys';
 
+/**
+ * Provided by the MCP subprocess when a long-running daemon is detected
+ * (~/.whatsapp-mcp/daemon.sock). Tools that need a live Baileys socket
+ * (fetch_more_history, download_media) should prefer this when present —
+ * the local `connection` will be idle in that case because the daemon owns
+ * the linked-device slot.
+ */
+export interface DaemonDelegate {
+  fetchHistory(
+    chat_id: string,
+    before_timestamp: number | undefined,
+    count: number,
+  ): Promise<{ fetched_count: number; oldest_in_store_timestamp: number | null } | null>;
+  downloadMedia(
+    chat_id: string,
+    message_id: string,
+  ): Promise<{
+    data: Buffer;
+    mime: string;
+    type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  } | null>;
+}
+
 export interface ToolContext {
   store: Store;
   connection: WhatsAppConnection;
+  /** Present when a daemon is running and serving IPC. */
+  daemon?: DaemonDelegate;
 }
 
 /** MCP content blocks we produce. Mirrors the SDK's CallToolResult content. */

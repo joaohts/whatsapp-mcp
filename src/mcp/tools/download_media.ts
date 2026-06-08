@@ -13,17 +13,29 @@ const handler: ToolHandler = async (ctx, args) => {
   const chat_id = requireStr(args, 'chat_id');
   const message_id = requireStr(args, 'message_id');
 
-  if (!ctx.connection.isConnected()) {
-    return textError(
-      'Not connected to WhatsApp — cannot download media. Open the app to reconnect.',
-    );
-  }
+  let result: { data: Buffer; mime: string; type: string } | null = null;
 
-  const result = await ctx.connection.downloadMedia(chat_id, message_id);
-  if (!result) {
-    return textError(
-      `No downloadable media found for message ${message_id} in ${chat_id}.`,
-    );
+  if (ctx.daemon) {
+    // Daemon owns the socket; delegate. The daemon already verified the
+    // message exists and decrypted the bytes.
+    result = await ctx.daemon.downloadMedia(chat_id, message_id);
+    if (!result) {
+      return textError(
+        `Daemon could not download media for message ${message_id} in ${chat_id}.`,
+      );
+    }
+  } else {
+    if (!ctx.connection.isConnected()) {
+      return textError(
+        'Not connected to WhatsApp — cannot download media. Open the app to reconnect.',
+      );
+    }
+    result = await ctx.connection.downloadMedia(chat_id, message_id);
+    if (!result) {
+      return textError(
+        `No downloadable media found for message ${message_id} in ${chat_id}.`,
+      );
+    }
   }
 
   const { data, mime, type } = result;

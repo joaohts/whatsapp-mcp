@@ -1,0 +1,20 @@
+[Unit]
+Description=whatsapp-mcp daemon — keeps Baileys connected so the local store stays warm
+Documentation=https://github.com/joaohts/whatsapp-mcp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.whatsapp-mcp/repo/bin/whatsapp-mcp daemon
+Restart=on-failure
+RestartSec=10
+# Cap restart spinning on a persistent failure (e.g. unpaired account).
+StartLimitBurst=5
+StartLimitIntervalSec=300
+# Be a good systemd citizen.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

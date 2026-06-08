@@ -28,8 +28,56 @@ Two install paths:
 | `whatsapp-mcp setup` | Pair + register with Claude Code. The default entry point. Interactive prompts unless `--yes` is passed. |
 | `whatsapp-mcp pair` | Pair only. Useful for re-pairing without touching Claude Code config. |
 | `whatsapp-mcp watch-qr` | Run in a separate terminal alongside `setup` / `pair`. Renders a live-updating ASCII QR; auto-refreshes when WhatsApp rotates (~60s) and exits when pairing completes. |
-| `whatsapp-mcp serve` | Run the MCP server on stdio. This is what Claude Code spawns. |
-| `whatsapp-mcp status` | Show paths + pairing state + whether Claude Code is configured. |
+| `whatsapp-mcp daemon` | Long-running Baileys connection + IPC server. Keeps the local store warm between Claude sessions. See "Daemon mode" below. |
+| `whatsapp-mcp serve` | Run the MCP server on stdio. This is what Claude Code spawns. Auto-detects a running daemon and delegates the two stateful tools to it. |
+| `whatsapp-mcp status` | Show paths + pairing state + Claude Code config + daemon state. |
+
+## Daemon mode (recommended on always-on machines)
+
+By default the MCP subprocess (spawned by Claude Code) brings up its own Baileys connection — fine if Claude is open most of the day, but on machines where Claude opens briefly and then closes (e.g. a Pi, or a CLI you run a few times a day) the store can lag.
+
+`whatsapp-mcp daemon` is a long-running Node process that:
+- Holds the single Baileys linked-device slot continuously.
+- Persists incoming `messages.upsert` / `chats.upsert` / etc. events to SQLite in real time, so the store is always fresh.
+- Listens on a Unix socket at `~/.whatsapp-mcp/daemon.sock` for the two stateful operations: `fetch_history` and `download_media`.
+
+When `serve` starts, it pings that socket. If the daemon is alive:
+- `serve` does **not** open its own Baileys connection (avoiding the 1-linked-device-per-account conflict).
+- 10 of the 12 MCP tools read SQLite directly (already real-time).
+- `fetch_more_history` and `download_media` are delegated to the daemon over IPC.
+
+If no daemon is running, `serve` behaves exactly as before — opens its own Baileys connection per session.
+
+### Install as a systemd `--user` service (Linux)
+
+After `npm install + npm run build`:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp ~/.whatsapp-mcp/repo/install/whatsapp-mcp.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now whatsapp-mcp.service
+
+# So the service runs even when no SSH/console session is active:
+sudo loginctl enable-linger "$USER"
+```
+
+Check it's up:
+
+```bash
+systemctl --user status whatsapp-mcp.service
+journalctl --user -u whatsapp-mcp.service -f
+~/.whatsapp-mcp/repo/bin/whatsapp-mcp status   # should report daemon: running
+```
+
+### Run as a foreground/background process (macOS or quick test)
+
+```bash
+nohup ~/.whatsapp-mcp/repo/bin/whatsapp-mcp daemon > /tmp/whatsapp-mcp-daemon.log 2>&1 &
+~/.whatsapp-mcp/repo/bin/whatsapp-mcp status   # daemon: running
+```
+
+A native macOS `launchd` plist would be the equivalent of the systemd unit — not shipped yet; PRs welcome.
 
 ## Showing the QR — three modes
 

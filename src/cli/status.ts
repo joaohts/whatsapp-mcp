@@ -29,6 +29,9 @@ export async function showStatus(): Promise<void> {
     }
   })();
 
+  const { daemonPing } = await import('./daemon-client');
+  const daemon = await daemonPing();
+
   process.stdout.write(
     [
       `state dir:     ${appSupportDir}`,
@@ -38,6 +41,7 @@ export async function showStatus(): Promise<void> {
       `logs:          ${logsDir}`,
       `claude code:   ${claudeCodeConfigPath} ${claudeConfigured ? '(configured)' : '(not configured)'}`,
       `paired:        ${paired ? 'yes' : 'no'}`,
+      `daemon:        ${daemon ? `running (connected=${daemon.connected})` : 'not running'}`,
       '',
     ].join('\n'),
   );
