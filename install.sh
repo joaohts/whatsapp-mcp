@@ -4,18 +4,22 @@
 # Node — Claude Code ships as an npm package).
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/joaohts/whatsapp-mcp/cli/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/joaohts/whatsapp-mcp/main/install.sh)
 #
 # What this does:
 #   1. Verifies git + node ≥ 20 are present.
-#   2. Clones the cli branch into ~/.whatsapp-mcp/repo (or pulls if it exists).
+#   2. Clones the repo into ~/.whatsapp-mcp/repo (or pulls if it exists).
 #   3. npm install + npm run build.
 #   4. Runs `whatsapp-mcp setup` to pair + register with Claude Code.
+#
+# Note: this clones main, which includes the DMG (Electron) sources too. They
+# install but never run on a headless box; the cost is ~150 MB of unused
+# node_modules. We accept that to avoid maintaining a separate branch.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/joaohts/whatsapp-mcp.git"
-BRANCH="cli"
+BRANCH="main"
 TARGET="${WHATSAPP_MCP_REPO:-$HOME/.whatsapp-mcp/repo}"
 
 if ! command -v git >/dev/null 2>&1; then
