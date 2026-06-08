@@ -105,6 +105,11 @@ function openInPreview(path: string): void {
   // manually). spawn with detached + unref so we don't hold a child handle.
   try {
     const child = spawn('open', [path], { stdio: 'ignore', detached: true });
+    // ENOENT (e.g. on Linux where `open` doesn't exist) surfaces as an async
+    // 'error' event, not a sync throw. Swallow it so the pairing flow survives.
+    child.on('error', () => {
+      /* non-fatal */
+    });
     child.unref();
   } catch {
     /* non-fatal */

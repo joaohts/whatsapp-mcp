@@ -4,6 +4,7 @@
 //   setup    — pair + register with Claude Code (interactive by default,
 //              fully scriptable via flags)
 //   pair     — pair only (terminal QR or code)
+//   daemon   — long-running Baileys + store keeper (systemd-friendly)
 //   serve    — run the MCP server on stdio (this is what Claude Code spawns)
 //   status   — show pairing state + paths
 //   version  — print version
@@ -17,6 +18,7 @@ Usage:
   whatsapp-mcp setup [--method qr|code] [--phone +5511...] [--yes]
   whatsapp-mcp pair  [--method qr|code] [--phone +5511...]
   whatsapp-mcp watch-qr
+  whatsapp-mcp daemon
   whatsapp-mcp serve
   whatsapp-mcp status
   whatsapp-mcp version
@@ -24,6 +26,9 @@ Usage:
 State lives under \$WHATSAPP_MCP_HOME (default: ~/.whatsapp-mcp/).
 \`watch-qr\` runs in a separate terminal alongside \`setup\` / \`pair\` and
 renders a live-updating ASCII QR while pairing is pending.
+\`daemon\` keeps Baileys connected continuously so the local store stays warm
+between Claude sessions. The MCP server (\`serve\`) detects a running daemon
+and delegates the two stateful tools to it.
 `;
 
 interface ParsedArgs {
@@ -78,6 +83,11 @@ async function main(): Promise<void> {
     case 'serve': {
       const { serve } = await import('./serve');
       await serve();
+      break;
+    }
+    case 'daemon': {
+      const { runDaemon } = await import('./daemon');
+      await runDaemon();
       break;
     }
     case 'watch-qr': {

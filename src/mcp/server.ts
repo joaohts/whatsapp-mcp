@@ -35,12 +35,42 @@ export async function runMcpServer(): Promise<void> {
 
   const store = new Store(storeDbPath);
   const connection = new WhatsAppConnection(store);
-  const ctx: ToolContext = { store, connection };
 
-  // Bring up the socket with existing auth. If unpaired this still resolves;
-  // store-only tools work (returning whatever is cached), socket-dependent
-  // tools report "not connected".
-  connection.start().catch((err) => log.error('connection.start failed', err));
+  // Daemon check: if a long-running `whatsapp-mcp daemon` is alive and serving
+  // its IPC socket, it owns the single Baileys linked-device slot. We DO NOT
+  // bring up our own connection in that case — WhatsApp would boot one of the
+  // two sessions. Instead we read SQLite directly (always real-time fresh, the
+  // daemon's event handlers are persisting), and delegate the two stateful
+  // tools (fetch_more_history, download_media) to the daemon over IPC.
+  const {
+    daemonPing,
+    daemonFetchHistory,
+    daemonDownloadMedia,
+  } = await import('../cli/daemon-client');
+  const ping = await daemonPing();
+  const ctx: ToolContext = ping
+    ? {
+        store,
+        connection,
+        daemon: {
+          fetchHistory: daemonFetchHistory,
+          downloadMedia: async (chat_id, message_id) => {
+            const r = await daemonDownloadMedia(chat_id, message_id);
+            if (!r) return null;
+            return { data: Buffer.from(r.data, 'base64'), mime: r.mime, type: r.type };
+          },
+        },
+      }
+    : { store, connection };
+
+  if (ping) {
+    log.info('daemon detected; running in delegated mode');
+  } else {
+    // No daemon — bring up our own socket with existing auth. If unpaired this
+    // still resolves; store-only tools work (returning whatever is cached),
+    // socket-dependent tools report "not connected".
+    connection.start().catch((err) => log.error('connection.start failed', err));
+  }
 
   const server = new Server(
     { name: 'whatsapp', version: APP_VERSION },
@@ -65,7 +95,8 @@ export async function runMcpServer(): Promise<void> {
 
     // Per PLANNING: the initial post-pair history sync blocks tool responses
     // so Claude's first call sees a populated store. No-op once resolved.
-    await connection.waitForInitialSync();
+    // Skip when the daemon owns the socket — its store is already warm.
+    if (!ctx.daemon) await connection.waitForInitialSync();
 
     try {
       return await HANDLERS[name](ctx, args);
