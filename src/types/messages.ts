@@ -45,6 +45,10 @@ export interface Message {
   from_me: boolean;
   /** In group chats: which participant sent it. Null for direct chats. */
   author: ChatId | null;
+  /** Saved-contact name resolved from `from`/`author`, lid or jid. Null when
+   *  the sender's JID has no matching contact row yet (e.g. someone in a
+   *  group not in the user's address book; or before contacts have synced). */
+  sender_name: string | null;
   body: string | null;
   type: MessageType;
   has_media: boolean;

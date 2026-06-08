@@ -58,6 +58,22 @@ export class BackendControllerImpl implements BackendController {
     }
 
     this.connection = new WhatsAppConnection(this.store);
+
+    // Once Baileys reports connected, run a one-shot lid backfill so group
+    // message senders resolve to a contact name. Fires asynchronously so the
+    // GUI doesn't wait on it. Idempotent.
+    const conn = this.connection;
+    const store = this.store;
+    const offStatus = conn.on('status', (status) => {
+      if (status.connection !== 'connected') return;
+      offStatus();
+      void import('../baileys/backfill').then(({ backfillContactLids }) =>
+        backfillContactLids(store, conn).catch((err) =>
+          log.warn('backfillContactLids failed', err),
+        ),
+      );
+    });
+
     await this.connection.start();
     log.info('backend controller started');
   }

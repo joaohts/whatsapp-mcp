@@ -547,6 +547,18 @@ export class WhatsAppConnection {
         name: g.subject ?? undefined,
         is_group: true,
       });
+      // Group metadata carries the participant list with both `id` and `lid`
+      // populated per member — the only authoritative source of the
+      // lid↔contact mapping we get without sock.groupMetadata round trips.
+      // Persist each so group message senders (which arrive as @lid) can
+      // resolve back to a name via the contacts JOIN on read.
+      const participants = g.participants;
+      if (Array.isArray(participants) && participants.length > 0) {
+        for (const p of participants) {
+          const row = mapContact(p);
+          if (row) this.store.upsertContact(row);
+        }
+      }
     }
   }
 

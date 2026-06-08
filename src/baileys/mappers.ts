@@ -381,11 +381,23 @@ export function mapContact(
   const rawId = contact.id;
   if (!rawId || isIgnoredJid(rawId)) return null;
   const id = jidNormalizedUser(rawId) || rawId;
-  const number = jidDecode(id)?.user ?? null;
+  // Baileys' Contact type carries both `lid` (per-group privacy ID) and
+  // `jid` (phone-number JID). Capture lid alongside id so group message
+  // senders that arrive as @lid resolve back to a contact name.
+  const lid = contact.lid
+    ? jidNormalizedUser(contact.lid) || contact.lid
+    : null;
+  // Prefer jid-derived phone number; fall back to whatever id decoded to.
+  const phoneJid = contact.jid
+    ? jidNormalizedUser(contact.jid) || contact.jid
+    : null;
+  const number =
+    (phoneJid && jidDecode(phoneJid)?.user) || jidDecode(id)?.user || null;
   return {
     id,
     name: contact.name ?? null,
     pushname: contact.notify ?? null,
     number,
+    lid,
   };
 }

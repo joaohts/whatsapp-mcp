@@ -51,6 +51,9 @@ export interface ContactUpsert {
   name?: string | null;
   pushname?: string | null;
   number?: string | null;
+  /** WhatsApp's per-group privacy ID. Lets us resolve group message senders
+   *  (which arrive as `@lid`) back to the saved contact name. */
+  lid?: string | null;
 }
 
 export type MediaRefUpsert = MediaIndexEntry;
@@ -69,6 +72,8 @@ interface MessageRow {
   edited_at: number | null;
   read_by_recipient: number | null;
   reactions: string;
+  /** Resolved via contacts JOIN; null when no row matches the sender_id. */
+  sender_name: string | null;
 }
 
 interface ChatRow {
@@ -83,7 +88,13 @@ interface ChatRow {
 }
 
 const MESSAGE_COLS =
-  'id, chat_id, timestamp, sender_id, from_me, author, body, type, has_media, reply_to_message_id, edited_at, read_by_recipient, reactions';
+  'm.id, m.chat_id, m.timestamp, m.sender_id, m.from_me, m.author, m.body, m.type, m.has_media, m.reply_to_message_id, m.edited_at, m.read_by_recipient, m.reactions, COALESCE(c.name, c.pushname) AS sender_name';
+// LEFT JOIN: a sender is matched by either form of its handle. Contacts
+// arrive keyed by either jid or lid depending on context; the OR makes both
+// resolvable. With idx_contacts_lid + the PK on id, SQLite handles this fine
+// at our scale.
+const MESSAGES_FROM =
+  'FROM messages m LEFT JOIN contacts c ON c.id = m.sender_id OR c.lid = m.sender_id';
 
 export class Store {
   private db: DB;
@@ -174,12 +185,13 @@ export class Store {
         WHERE @ts >= COALESCE(chats.last_message_timestamp, 0)
       `),
       upsertContact: this.db.prepare(`
-        INSERT INTO contacts (id, name, pushname, number)
-        VALUES (@id, @name, @pushname, @number)
+        INSERT INTO contacts (id, name, pushname, number, lid)
+        VALUES (@id, @name, @pushname, @number, @lid)
         ON CONFLICT(id) DO UPDATE SET
           name = COALESCE(excluded.name, contacts.name),
           pushname = COALESCE(excluded.pushname, contacts.pushname),
-          number = COALESCE(excluded.number, contacts.number)
+          number = COALESCE(excluded.number, contacts.number),
+          lid = COALESCE(excluded.lid, contacts.lid)
       `),
       upsertMedia: this.db.prepare(`
         INSERT INTO media_refs (message_id, chat_id, timestamp, type, mime_type,
@@ -328,6 +340,7 @@ export class Store {
       name: c.name ?? null,
       pushname: c.pushname ?? null,
       number: c.number ?? null,
+      lid: c.lid ?? null,
     });
   }
 
@@ -365,6 +378,18 @@ export class Store {
     return rows.map(rowToChat);
   }
 
+  /** All group chat IDs, recent-activity-first. Used by the lid backfill. */
+  listGroupChatIds(): ChatId[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM chats WHERE is_group = 1
+           ORDER BY last_message_timestamp DESC NULLS LAST`,
+        )
+        .all() as Array<{ id: string }>
+    ).map((r) => r.id);
+  }
+
   listChatsOverview(limit: number, offset: number): ChatOverview[] {
     const rows = this.db
       .prepare(
@@ -385,28 +410,28 @@ export class Store {
     after_timestamp?: number;
     from_me?: boolean;
   }): Message[] {
-    const clauses = ['chat_id = @chat_id'];
+    const clauses = ['m.chat_id = @chat_id'];
     const bind: Record<string, unknown> = {
       chat_id: params.chat_id,
       limit: params.limit,
     };
     if (params.before_timestamp != null) {
-      clauses.push('timestamp < @before');
+      clauses.push('m.timestamp < @before');
       bind.before = params.before_timestamp;
     }
     if (params.after_timestamp != null) {
-      clauses.push('timestamp > @after');
+      clauses.push('m.timestamp > @after');
       bind.after = params.after_timestamp;
     }
     if (params.from_me != null) {
-      clauses.push('from_me = @from_me');
+      clauses.push('m.from_me = @from_me');
       bind.from_me = params.from_me ? 1 : 0;
     }
     const rows = this.db
       .prepare(
-        `SELECT ${MESSAGE_COLS} FROM messages
+        `SELECT ${MESSAGE_COLS} ${MESSAGES_FROM}
          WHERE ${clauses.join(' AND ')}
-         ORDER BY timestamp DESC
+         ORDER BY m.timestamp DESC
          LIMIT @limit`,
       )
       .all(bind) as MessageRow[];
@@ -416,7 +441,7 @@ export class Store {
   getMessage(chatId: ChatId, messageId: MessageId): Message | null {
     const row = this.db
       .prepare(
-        `SELECT ${MESSAGE_COLS} FROM messages WHERE chat_id = ? AND id = ?`,
+        `SELECT ${MESSAGE_COLS} ${MESSAGES_FROM} WHERE m.chat_id = ? AND m.id = ?`,
       )
       .get(chatId, messageId) as MessageRow | undefined;
     return row ? rowToMessage(row) : null;
@@ -459,11 +484,10 @@ export class Store {
     const cap = Math.min(maxChats * limitPerChat * 4, 2000);
     const rows = this.db
       .prepare(
-        `SELECT ${MESSAGE_COLS.split(', ')
-          .map((c) => `m.${c}`)
-          .join(', ')}
+        `SELECT ${MESSAGE_COLS}
          FROM messages_fts f
          JOIN messages m ON m.rowid = f.rowid
+         LEFT JOIN contacts c ON c.id = m.sender_id OR c.lid = m.sender_id
          WHERE messages_fts MATCH ?
          ORDER BY f.rank
          LIMIT ?`,
@@ -551,9 +575,16 @@ export class Store {
   getContactRow(
     id: ChatId,
   ): { id: string; name: string | null; pushname: string | null; number: string | null } | null {
+    // Accept either form of handle. If the caller passes an @lid, match the
+    // lid column; otherwise match by id PK. The OR is fine — contacts is
+    // small and both lookups are indexed.
     const row = this.db
-      .prepare(`SELECT id, name, pushname, number FROM contacts WHERE id = ?`)
-      .get(id) as
+      .prepare(
+        `SELECT id, name, pushname, number FROM contacts
+         WHERE id = @id OR lid = @id
+         LIMIT 1`,
+      )
+      .get({ id }) as
       | { id: string; name: string | null; pushname: string | null; number: string | null }
       | undefined;
     return row ?? null;
@@ -627,6 +658,7 @@ function rowToMessage(r: MessageRow): Message {
     from: r.sender_id,
     from_me: !!r.from_me,
     author: r.author,
+    sender_name: r.sender_name,
     body: r.body,
     type: r.type as MessageType,
     has_media: !!r.has_media,

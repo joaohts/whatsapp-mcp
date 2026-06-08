@@ -181,6 +181,20 @@ export async function runDaemon(): Promise<void> {
   // we want it to keep trying and the store to stay readable.
   connection.start().catch((err) => log.error('connection.start failed', err));
 
+  // Once Baileys reports connected, run a one-shot lid backfill: walk every
+  // group in the store and ask WA for its participant list (which carries
+  // both jid and lid per member) so future group messages resolve to a
+  // contact name. Idempotent + best-effort.
+  const offStatus = connection.on('status', (status) => {
+    if (status.connection !== 'connected') return;
+    offStatus(); // only run once per daemon lifetime
+    void import('../baileys/backfill').then(({ backfillContactLids }) =>
+      backfillContactLids(store, connection).catch((err) =>
+        log.warn('backfillContactLids failed', err),
+      ),
+    );
+  });
+
   let stopping = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
