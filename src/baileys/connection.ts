@@ -29,6 +29,7 @@ import type {
   Contact as WAContact,
 } from '@whiskeysockets/baileys';
 import type { Boom } from '@hapi/boom';
+import { hostname } from 'node:os';
 import { Store } from '../store';
 import { log, makeBaileysLogger } from '../backend/logger';
 import { authDir } from '../backend/paths';
@@ -234,7 +235,15 @@ export class WhatsAppConnection {
       auth: state,
       version,
       logger: makeBaileysLogger('warn') as never,
-      browser: Browsers.macOS('WhatsAppMCP'),
+      // Distinct linked-device identity per host. WhatsApp shows this in
+      // Settings → Linked Devices; identical names across installs make the
+      // list ambiguous and WA can also drop older sessions sharing the name
+      // (observed: Mac and Pi both labeled "WhatsAppMCP" → Mac got "replaced"
+      // on the Pi's first pair). Hostname makes every install unique.
+      browser:
+        process.platform === 'darwin'
+          ? Browsers.macOS(`WhatsAppMCP @ ${hostname()}`)
+          : Browsers.ubuntu(`WhatsAppMCP @ ${hostname()}`),
       markOnlineOnConnect: false, // never announce presence (read-only)
       // We want a shallow sync: tell WA we're not a full-history client
       // (so it doesn't push years of messages), but ALSO override Baileys'
