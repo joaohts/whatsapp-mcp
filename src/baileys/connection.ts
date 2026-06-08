@@ -465,6 +465,33 @@ export class WhatsAppConnection {
     sock.ev.on('groups.update', (groups) =>
       this.persistGroups(groups as Partial<GroupMetadata>[]),
     );
+
+    // WhatsApp emits this when it learns the lid <-> phone-JID mapping for a
+    // contact. Look up whatever we already know about the phone-JID side
+    // (likely from the user's saved address book) and propagate that name to
+    // the lid-keyed row, so group message senders that arrive as @lid resolve
+    // to the user's saved contact name via the sender_name JOIN.
+    sock.ev.on('chats.phoneNumberShare', ({ lid, jid }) => {
+      if (!lid || !jid) return;
+      const existing = this.store.getContactRow(jid);
+      if (!existing) return;
+      // Mirror name fields onto the lid-keyed row.
+      this.store.upsertContact({
+        id: lid,
+        name: existing.name,
+        pushname: existing.pushname,
+        number: existing.number,
+        lid,
+      });
+      // Make the jid-keyed row aware of its lid too, for completeness.
+      this.store.upsertContact({
+        id: jid,
+        name: null,
+        pushname: null,
+        number: null,
+        lid,
+      });
+    });
   }
 
   private onHistory(h: {
@@ -508,6 +535,7 @@ export class WhatsAppConnection {
           mapped.reactions,
         );
       }
+      if (mapped.senderContact) this.store.upsertContact(mapped.senderContact);
       const p = mapped.chatPreview;
       this.store.applyLastMessage(
         p.chatId,

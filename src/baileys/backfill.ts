@@ -51,6 +51,21 @@ export function backfillGroupSenders(store: Store): BackfillStats {
       const normalized = jidNormalizedUser(participantJid) || participantJid;
       store.setMessageSender(row.chat_id, row.id, normalized, normalized);
       stats.updated++;
+
+      // Same proto carries msg.pushName — the sender's WhatsApp display name
+      // at the time. Seed it into contacts so the sender_name JOIN resolves
+      // even when group metadata didn't bring a name (very common: people in
+      // shared groups who aren't in the user's address book).
+      if (msg.pushName) {
+        const isLid = normalized.endsWith('@lid');
+        store.upsertContact({
+          id: normalized,
+          name: null,
+          pushname: msg.pushName,
+          number: null,
+          lid: isLid ? normalized : null,
+        });
+      }
     }
 
     // If this chunk was all-no-op (everything was unchanged or failed), the
@@ -131,5 +146,78 @@ export async function backfillContactLids(
   log.info(
     `backfillContactLids: groups=${stats.groups_succeeded}/${stats.groups_total} failed=${stats.groups_failed} participants=${stats.participants_upserted}`,
   );
+  return stats;
+}
+
+// ---- sender pushName backfill ----
+//
+// Every WAMessage proto carries msg.pushName — the sender's WhatsApp profile
+// name at the time. For group participants we don't have in our address book,
+// this is often the only available display name (groupMetadata's Contact
+// rows can come back with id+lid and no name/notify). This helper walks
+// stored group-message protos for senders with no name yet, extracts
+// pushName, and upserts it into contacts so the sender_name JOIN resolves
+// to something useful. Idempotent and chunked.
+
+const PUSHNAME_CHUNK_SIZE = 2000;
+
+export interface SenderPushNameBackfillStats {
+  scanned: number;
+  contacts_upserted: number;
+  rows_without_pushname: number;
+  decode_failures: number;
+}
+
+export function backfillSenderPushNames(store: Store): SenderPushNameBackfillStats {
+  const stats: SenderPushNameBackfillStats = {
+    scanned: 0,
+    contacts_upserted: 0,
+    rows_without_pushname: 0,
+    decode_failures: 0,
+  };
+
+  // Stream by rowid so we make forward progress even when rows we visit get
+  // their contact resolved mid-loop (the WHERE clause would otherwise filter
+  // them on the next chunk and the iterator would loop forever on the same
+  // unresolvable tail).
+  let afterRowid = 0;
+  while (true) {
+    const rows = store.listGroupMessagesForPushNameBackfill(
+      afterRowid,
+      PUSHNAME_CHUNK_SIZE,
+    );
+    if (rows.length === 0) break;
+    stats.scanned += rows.length;
+
+    for (const row of rows) {
+      afterRowid = row.rowid;
+      let msg: proto.IWebMessageInfo;
+      try {
+        msg = proto.WebMessageInfo.decode(row.raw_proto);
+      } catch {
+        stats.decode_failures++;
+        continue;
+      }
+      if (!msg.pushName) {
+        stats.rows_without_pushname++;
+        continue;
+      }
+      const isLid = row.sender_id.endsWith('@lid');
+      store.upsertContact({
+        id: row.sender_id,
+        name: null,
+        pushname: msg.pushName,
+        number: null,
+        lid: isLid ? row.sender_id : null,
+      });
+      stats.contacts_upserted++;
+    }
+  }
+
+  if (stats.scanned > 0) {
+    log.info(
+      `backfillSenderPushNames: scanned=${stats.scanned} upserted=${stats.contacts_upserted} no_pushname=${stats.rows_without_pushname} decode_failures=${stats.decode_failures}`,
+    );
+  }
   return stats;
 }

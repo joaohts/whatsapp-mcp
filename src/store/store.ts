@@ -299,6 +299,36 @@ export class Store {
     }>;
   }
 
+  /** Group messages whose sender has no display name in contacts. Used by
+   *  the pushName backfill — each WAMessage proto carries msg.pushName which
+   *  is often the only name we can resolve a non-saved group member to. */
+  listGroupMessagesForPushNameBackfill(
+    afterRowid: number,
+    limit: number,
+  ): Array<{ rowid: number; chat_id: ChatId; id: MessageId; sender_id: string; raw_proto: Buffer }> {
+    return this.db
+      .prepare(
+        `SELECT m.rowid, m.chat_id, m.id, m.sender_id, m.raw_proto
+         FROM messages m
+         LEFT JOIN contacts c ON c.id = m.sender_id
+         WHERE m.from_me = 0
+           AND m.sender_id IS NOT NULL
+           AND m.raw_proto IS NOT NULL
+           AND m.chat_id LIKE '%@g.us'
+           AND (c.id IS NULL OR (c.name IS NULL AND c.pushname IS NULL))
+           AND m.rowid > @after_rowid
+         ORDER BY m.rowid
+         LIMIT @limit`,
+      )
+      .all({ after_rowid: afterRowid, limit }) as Array<{
+      rowid: number;
+      chat_id: ChatId;
+      id: MessageId;
+      sender_id: string;
+      raw_proto: Buffer;
+    }>;
+  }
+
   setEdited(
     chatId: ChatId,
     messageId: MessageId,

@@ -81,6 +81,11 @@ export interface MappedMessage {
   message: MessageUpsert;
   media?: MediaRefUpsert;
   reactions?: Reaction[];
+  /** Sender's contact info inferred from this message (sender JID + pushName
+   *  from msg.pushName). Lets us learn display names for senders we don't
+   *  yet have a name for — group participants whose contact rows arrive from
+   *  groupMetadata with id+lid only and no name/notify. */
+  senderContact?: ContactUpsert;
   /** For updating the chat's last-message summary. */
   chatPreview: {
     chatId: string;
@@ -179,10 +184,27 @@ export function mapMessage(
 
   const reactions = extractReactions(msg);
 
+  // Each WAMessage carries the sender's currently-set WhatsApp profile name
+  // (msg.pushName). For incoming group messages where we don't have a saved
+  // contact name yet, this is often the only available display name. Upsert
+  // it so the sender_name JOIN resolves to something useful instead of null.
+  let senderContact: ContactUpsert | undefined;
+  if (!fromMe && sender && msg.pushName) {
+    const isLid = sender.endsWith('@lid');
+    senderContact = {
+      id: sender,
+      name: null,
+      pushname: msg.pushName,
+      number: null,
+      lid: isLid ? sender : null,
+    };
+  }
+
   return {
     message,
     media,
     reactions,
+    senderContact,
     chatPreview: {
       chatId,
       isGroup,
